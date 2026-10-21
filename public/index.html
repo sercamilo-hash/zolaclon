@@ -359,8 +359,9 @@
       <div id="mapContainer">
         <div id="map"></div>
         <div class="map-toolbar no-print">
+          <label style="cursor: pointer;"><input type="checkbox" id="chkNeighborLots" checked onchange="toggleNeighborLots()"> <strong>NEIGHBOR LOTS</strong></label>
           <label style="cursor: pointer;"><input type="checkbox" id="chkZoningLayer" checked onchange="toggleZoningLayer()"> <strong>ZR DISTRICTS</strong></label>
-          <label style="cursor: pointer;"><input type="checkbox" id="chkTaxLotLayer" checked onchange="toggleLotPolygon()"> <strong>TAX LOT</strong></label>
+          <label style="cursor: pointer;"><input type="checkbox" id="chkTaxLotLayer" checked onchange="toggleLotPolygon()"> <strong>SELECTED LOT</strong></label>
           <select id="mapBaseSelect" onchange="changeBaseMap(this.value)" style="border: 1px solid #000; font-size: 10px;">
             <option value="carto">MONOCHROME (CARTO)</option>
             <option value="satellite">SATELLITE (ESRI)</option>

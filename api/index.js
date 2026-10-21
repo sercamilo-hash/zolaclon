@@ -89,6 +89,60 @@ app.get('/api/zoning-surrounding', async (req, res) => {
   }
 });
 
+// 2.2 Fetch Neighboring Tax Lots (Interactive lot polygons)
+app.get('/api/lots-neighboring', async (req, res) => {
+  try {
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'lat and lng required' });
+    }
+
+    const sql = `SELECT bbl, block, lot, address, zonedist1, lotarea, ST_AsGeoJSON(the_geom) as geojson 
+                 FROM dcp_mappluto 
+                 WHERE ST_DWithin(the_geom, ST_SetSRID(ST_Point(${lng}, ${lat}), 4326), 0.0035) 
+                 LIMIT 75`;
+    const cartoUrl = `https://planninglabs.carto.com/api/v2/sql?q=${encodeURIComponent(sql)}`;
+    
+    const response = await fetch(cartoUrl);
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Carto API error' });
+    }
+    const data = await response.json();
+    res.json(data.rows || []);
+  } catch (err) {
+    console.error('Neighboring lots error:', err);
+    res.status(500).json({ error: 'Failed to load neighboring lots', details: err.message });
+  }
+});
+
+// 2.3 Query Lot by clicking map coordinate (Point In Polygon)
+app.get('/api/lot-by-point', async (req, res) => {
+  try {
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'lat and lng required' });
+    }
+
+    const sql = `SELECT bbl, address, zonedist1 FROM dcp_mappluto WHERE ST_Intersects(the_geom, ST_SetSRID(ST_Point(${lng}, ${lat}), 4326)) LIMIT 1`;
+    const cartoUrl = `https://planninglabs.carto.com/api/v2/sql?q=${encodeURIComponent(sql)}`;
+    
+    const response = await fetch(cartoUrl);
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Carto API error' });
+    }
+    const data = await response.json();
+    if (!data.rows || data.rows.length === 0) {
+      return res.status(404).json({ error: 'No lot found at coordinates' });
+    }
+    res.json(data.rows[0]);
+  } catch (err) {
+    console.error('Point lookup error:', err);
+    res.status(500).json({ error: 'Failed to query point', details: err.message });
+  }
+});
+
 // 3. Export to CSV in the user's specific format
 app.post('/api/export-csv', (req, res) => {
   try {

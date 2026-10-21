@@ -1,9 +1,8 @@
-// Client Logic for NYC ZoLa Clone - Monochrome Spreadsheet Edition
-
 let map;
 let baseLayers = {};
 let currentBaseLayer;
 let lotGeoJsonLayer = null;
+let neighboringLotsLayer = null;
 let zoningDistrictsLayer = null;
 let currentLotData = null;
 
@@ -52,6 +51,26 @@ function initExcelMap() {
   currentBaseLayer.addTo(map);
 
   zoningDistrictsLayer = L.layerGroup().addTo(map);
+  neighboringLotsLayer = L.layerGroup().addTo(map);
+
+  // Click anywhere on map to query parcel (Point-In-Polygon)
+  map.on('click', async (e) => {
+    const { lat, lng } = e.latlng;
+    setStatus(`SEARCHING LOT AT: ${lat.toFixed(5)}, ${lng.toFixed(5)}...`);
+    try {
+      const res = await fetch(`/api/lot-by-point?lat=${lat}&lng=${lng}`);
+      if (res.ok) {
+        const found = await res.json();
+        if (found.bbl) {
+          loadLotByBbl(found.bbl, lat, lng);
+        }
+      } else {
+        setStatus('NO NYC LOT AT CLICKED POINT');
+      }
+    } catch (err) {
+      console.error('Click map query error:', err);
+    }
+  });
 
   // Invalidate size on window resize
   window.addEventListener('resize', () => {
@@ -64,6 +83,7 @@ function changeBaseMap(layerName) {
   if (currentBaseLayer) map.removeLayer(currentBaseLayer);
   currentBaseLayer = baseLayers[layerName];
   currentBaseLayer.addTo(map);
+  if (neighboringLotsLayer) neighboringLotsLayer.bringToFront();
   if (lotGeoJsonLayer) lotGeoJsonLayer.bringToFront();
 }
 
@@ -73,6 +93,15 @@ function toggleZoningLayer() {
     if (!map.hasLayer(zoningDistrictsLayer)) map.addLayer(zoningDistrictsLayer);
   } else {
     if (map.hasLayer(zoningDistrictsLayer)) map.removeLayer(zoningDistrictsLayer);
+  }
+}
+
+function toggleNeighborLots() {
+  const isChecked = document.getElementById('chkNeighborLots').checked;
+  if (isChecked) {
+    if (!map.hasLayer(neighboringLotsLayer)) map.addLayer(neighboringLotsLayer);
+  } else {
+    if (map.hasLayer(neighboringLotsLayer)) map.removeLayer(neighboringLotsLayer);
   }
 }
 
@@ -242,9 +271,10 @@ async function loadLotByBbl(bbl, fallbackLat, fallbackLng) {
       map.setView([lat, lng], 17);
     }
 
-    // Fetch surrounding zoning districts layer (ZoLa layer)
+    // Fetch surrounding zoning districts layer & neighboring lots (ZoLa layers)
     if (lat && lng) {
       loadSurroundingZoning(lat, lng);
+      loadNeighboringLots(lat, lng, data.propertyInfo.bbl);
     }
 
     setStatus(`READY • BBL: ${data.propertyInfo.bbl} (${data.propertyInfo.zoningDistrict})`);
@@ -253,6 +283,70 @@ async function loadLotByBbl(bbl, fallbackLat, fallbackLng) {
   } catch (err) {
     console.error('Failed to load lot:', err);
     setStatus('ERROR LOADING LOT');
+  }
+}
+
+async function loadNeighboringLots(lat, lng, activeBbl) {
+  try {
+    const res = await fetch(`/api/lots-neighboring?lat=${lat}&lng=${lng}`);
+    const rows = await res.json();
+    neighboringLotsLayer.clearLayers();
+
+    rows.forEach(r => {
+      if (!r.geojson || String(r.bbl) === String(activeBbl)) return;
+      try {
+        const geom = JSON.parse(r.geojson);
+        const poly = L.geoJSON(geom, {
+          style: {
+            color: '#666666',
+            weight: 1.2,
+            fillColor: '#000000',
+            fillOpacity: 0.04
+          }
+        });
+
+        // Interactive hover & click
+        poly.on('mouseover', (e) => {
+          poly.setStyle({
+            color: '#000000',
+            weight: 2.5,
+            fillColor: '#000000',
+            fillOpacity: 0.28
+          });
+          map.getContainer().style.cursor = 'pointer';
+        });
+
+        poly.on('mouseout', (e) => {
+          poly.setStyle({
+            color: '#666666',
+            weight: 1.2,
+            fillColor: '#000000',
+            fillOpacity: 0.04
+          });
+          map.getContainer().style.cursor = '';
+        });
+
+        poly.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          setStatus(`SELECTING NEIGHBOR LOT ${r.lot} (BBL: ${r.bbl})...`);
+          loadLotByBbl(r.bbl);
+        });
+
+        poly.bindTooltip(`
+          <div style="font-family: Arial; font-size: 10px;">
+            <strong>LOT ${r.lot}</strong><br/>
+            ${r.address || 'PARCEL'}<br/>
+            <b>${r.zonedist1 || ''}</b> • ${Number(r.lotarea || 0).toLocaleString()} SF
+          </div>
+        `, { sticky: true, className: 'no-radius' });
+
+        neighboringLotsLayer.addLayer(poly);
+      } catch (e) {}
+    });
+
+    if (lotGeoJsonLayer) lotGeoJsonLayer.bringToFront();
+  } catch (err) {
+    console.error('Failed to load neighboring lots:', err);
   }
 }
 
@@ -268,11 +362,11 @@ async function loadSurroundingZoning(lat, lng) {
         const geom = JSON.parse(r.geojson);
         const poly = L.geoJSON(geom, {
           style: {
-            color: '#444444',
-            weight: 1.5,
+            color: '#888888',
+            weight: 1,
             dashArray: '4, 4',
-            fillColor: '#666666',
-            fillOpacity: 0.05
+            fillColor: '#000000',
+            fillOpacity: 0.02
           }
         });
         poly.bindTooltip(`<b>${r.zonedist}</b>`, { permanent: false, direction: 'center', className: 'no-radius' });
@@ -280,6 +374,7 @@ async function loadSurroundingZoning(lat, lng) {
       } catch (e) {}
     });
 
+    if (neighboringLotsLayer) neighboringLotsLayer.bringToFront();
     if (lotGeoJsonLayer) lotGeoJsonLayer.bringToFront();
   } catch (e) {
     console.error('Failed to load zoning layer:', e);
