@@ -101,63 +101,57 @@ function generateZoningAnalysisCsv(data) {
   row();
   row();
 
-  // Building A Table
-  row('', '', 'BUILDING A');
-  row('', '', 'LEVEL', 'RESIDENTIAL GROOS FLOOR AREA', 'COMMERCIAL GROSS FLOOR AREA', 'DEDUCTIONS', '', '', '', '', '', '', 'NET FLOOR AREA', '5% ENERGY DEDUCTION ', 'ZONING FLOOR AREA', '', 'UNIT MIX');
-  row('', '', '', '', '', 'CHASE WALLS', 'MECHANICAL', 'PARKING', 'BYCICLE PARKING', 'AMENITIES', 'CORRIDOR', 'REFUSE', '', '', '', '', 'STUDIO', '1BR', '2BR', 'TOTAL');
-  
-  (bldgA.levels || []).forEach(lvl => {
+  // Buildings Tables (Dynamic list of buildings)
+  const buildingsList = (data.buildings && data.buildings.length > 0)
+    ? data.buildings
+    : [data.buildingA || getDefaultBuildingA(), data.buildingB || getDefaultBuildingB()].filter(Boolean);
+
+  let combResGfa = 0;
+  let combCommGfa = 0;
+  let combZfa = 0;
+  let combUnits = 0;
+  let combStudio = 0;
+  let combOneBr = 0;
+  let combTwoBr = 0;
+
+  buildingsList.forEach(bldg => {
+    const bName = bldg.name || 'BUILDING';
+    row('', '', bName.toUpperCase());
+    row('', '', 'LEVEL', 'RESIDENTIAL GROOS FLOOR AREA', 'COMMERCIAL GROSS FLOOR AREA', 'DEDUCTIONS', '', '', '', '', '', '', 'NET FLOOR AREA', '5% ENERGY DEDUCTION ', 'ZONING FLOOR AREA', '', 'UNIT MIX');
+    row('', '', '', '', '', 'CHASE WALLS', 'MECHANICAL', 'PARKING', 'BYCICLE PARKING', 'AMENITIES', 'CORRIDOR', 'REFUSE', '', '', '', '', 'STUDIO', '1BR', '2BR', 'TOTAL');
+
+    (bldg.levels || []).forEach(lvl => {
+      row(
+        '', '', lvl.level, lvl.resGfa || '', lvl.commGfa || '',
+        lvl.chaseWalls || '', lvl.mechanical || '', lvl.parking || '', lvl.bikeParking || '',
+        lvl.amenities || '', lvl.corridor || '', lvl.refuse || '',
+        lvl.netFloorArea || '', lvl.energyDeduction || '', lvl.zfa || '', '',
+        lvl.studio || '', lvl.oneBr || '', lvl.twoBr || '', lvl.totalUnits || ''
+      );
+    });
+
+    const tot = bldg.totals || {};
     row(
-      '', '', lvl.level, lvl.resGfa || '', lvl.commGfa || '',
-      lvl.chaseWalls || '', lvl.mechanical || '', lvl.parking || '', lvl.bikeParking || '',
-      lvl.amenities || '', lvl.corridor || '', lvl.refuse || '',
-      lvl.netFloorArea || '', lvl.energyDeduction || '', lvl.zfa || '', '',
-      lvl.studio || '', lvl.oneBr || '', lvl.twoBr || '', lvl.totalUnits || ''
+      '', '', 'TOTALS', tot.resGfa || 0, tot.commGfa || 0,
+      tot.chaseWalls || 0, tot.mechanical || 0, tot.parking || 0,
+      tot.bikeParking || 0, tot.amenities || 0, tot.corridor || 0,
+      tot.refuse || 0, tot.netFloorArea || 0, tot.energyDeduction || 0,
+      tot.zfa || 0, '',
+      tot.studio || 0, tot.oneBr || 0, tot.twoBr || 0, tot.totalUnits || 0
     );
+    row();
+
+    // Accumulate for consolidated totals
+    combResGfa += Number(tot.resGfa || 0);
+    combCommGfa += Number(tot.commGfa || 0);
+    combZfa += Number(tot.zfa || 0);
+    combUnits += Number(tot.totalUnits || 0);
+    combStudio += Number(tot.studio || 0);
+    combOneBr += Number(tot.oneBr || 0);
+    combTwoBr += Number(tot.twoBr || 0);
   });
-  row(
-    '', '', 'TOTALS', bldgA.totals?.resGfa || 0, bldgA.totals?.commGfa || 0,
-    bldgA.totals?.chaseWalls || 0, bldgA.totals?.mechanical || 0, bldgA.totals?.parking || 0,
-    bldgA.totals?.bikeParking || 0, bldgA.totals?.amenities || 0, bldgA.totals?.corridor || 0,
-    bldgA.totals?.refuse || 0, bldgA.totals?.netFloorArea || 0, bldgA.totals?.energyDeduction || 0,
-    bldgA.totals?.zfa || 0, '',
-    bldgA.totals?.studio || 0, bldgA.totals?.oneBr || 0, bldgA.totals?.twoBr || 0, bldgA.totals?.totalUnits || 0
-  );
-  row();
 
-  // Building B Table
-  row('', '', 'BUILDING B');
-  row('', '', 'LEVEL', 'RESIDENTIAL GROOS FLOOR AREA', 'COMMERCIAL GROSS FLOOR AREA', 'DEDUCTIONS', '', '', '', '', '', '', 'NET FLOOR AREA', '5% ENERGY DEDUCTION ', 'ZONING FLOOR AREA', '', 'UNIT MIX');
-  row('', '', '', '', '', 'CHASE WALLS', 'MECHANICAL', 'PARKING', 'BYCICLE PARKING', 'AMENITIES', 'CORRIDOR', 'REFUSE', '', '', '', '', 'STUDIO', '1BR', '2BR', 'TOTAL');
-
-  (bldgB.levels || []).forEach(lvl => {
-    row(
-      '', '', lvl.level, lvl.resGfa || '', lvl.commGfa || '',
-      lvl.chaseWalls || '', lvl.mechanical || '', lvl.parking || '', lvl.bikeParking || '',
-      lvl.amenities || '', lvl.corridor || '', lvl.refuse || '',
-      lvl.netFloorArea || '', lvl.energyDeduction || '', lvl.zfa || '', '',
-      lvl.studio || '', lvl.oneBr || '', lvl.twoBr || '', lvl.totalUnits || ''
-    );
-  });
-  row(
-    '', '', 'TOTALS', bldgB.totals?.resGfa || 0, bldgB.totals?.commGfa || 0,
-    bldgB.totals?.chaseWalls || 0, bldgB.totals?.mechanical || 0, bldgB.totals?.parking || 0,
-    bldgB.totals?.bikeParking || 0, bldgB.totals?.amenities || 0, bldgB.totals?.corridor || 0,
-    bldgB.totals?.refuse || 0, bldgB.totals?.netFloorArea || 0, bldgB.totals?.energyDeduction || 0,
-    bldgB.totals?.zfa || 0, '',
-    bldgB.totals?.studio || 0, bldgB.totals?.oneBr || 0, bldgB.totals?.twoBr || 0, bldgB.totals?.totalUnits || 0
-  );
-  row();
-
-  // Combined Totals
-  const combResGfa = (bldgA.totals?.resGfa || 0) + (bldgB.totals?.resGfa || 0);
-  const combCommGfa = (bldgA.totals?.commGfa || 0) + (bldgB.totals?.commGfa || 0);
-  const combZfa = (bldgA.totals?.zfa || 0) + (bldgB.totals?.zfa || 0);
-  const combUnits = (bldgA.totals?.totalUnits || 0) + (bldgB.totals?.totalUnits || 0);
-  const combStudio = (bldgA.totals?.studio || 0) + (bldgB.totals?.studio || 0);
-  const combOneBr = (bldgA.totals?.oneBr || 0) + (bldgB.totals?.oneBr || 0);
-  const combTwoBr = (bldgA.totals?.twoBr || 0) + (bldgB.totals?.twoBr || 0);
-
+  // Consolidated Totals
   row('', '', 'TOTALS', combResGfa, combCommGfa, '', '', '', '', '', '', '', '', '', combZfa, '', combStudio, combOneBr, combTwoBr, combUnits);
   row('', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', combUnits ? (combStudio/combUnits).toFixed(4) : 0, combUnits ? (combOneBr/combUnits).toFixed(4) : 0, combUnits ? (combTwoBr/combUnits).toFixed(4) : 0, 1);
   row('', '', '485X CALCS', Math.round(combUnits * 0.25));

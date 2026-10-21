@@ -436,9 +436,11 @@ function renderSpreadsheetData(data) {
 
   recalculateZoning();
 
-  // Sheet 2: Building Schedules
-  renderExcelBuildingTable('A', data.buildingA);
-  renderExcelBuildingTable('B', data.buildingB);
+  // Ensure buildings array exists
+  initBuildingsArray(data);
+
+  // Sheet 2: Building Schedules (Dynamic)
+  renderAllBuildings();
   updateCombinedTotals();
 
   // Sheet 3: ZR Clauses
@@ -446,6 +448,23 @@ function renderSpreadsheetData(data) {
 
   // Sheet 4: Raw CSV
   updateCsvPreview();
+}
+
+function initBuildingsArray(data) {
+  if (!data.buildings || data.buildings.length === 0) {
+    const list = [];
+    if (data.buildingA) {
+      data.buildingA.id = 'A';
+      data.buildingA.name = data.buildingA.name || 'BUILDING A';
+      list.push(data.buildingA);
+    }
+    if (data.buildingB) {
+      data.buildingB.id = 'B';
+      data.buildingB.name = data.buildingB.name || 'BUILDING B';
+      list.push(data.buildingB);
+    }
+    data.buildings = list;
+  }
 }
 
 function recalculateZoning() {
@@ -490,42 +509,133 @@ function recalculateZoning() {
 }
 
 // -------------------------------------------------------------
-// Building Schedules Logic
+// Dynamic Multi-Building & Multi-Floor Logic
 // -------------------------------------------------------------
-function renderExcelBuildingTable(bldgLetter, bldgData) {
-  const tbody = document.getElementById(`tbodyBldg${bldgLetter}`);
-  tbody.innerHTML = '';
+function renderAllBuildings() {
+  const container = document.getElementById('buildingsContainer');
+  if (!container) return;
+  container.innerHTML = '';
 
-  (bldgData.levels || []).forEach((lvl, idx) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="bold"><input type="text" value="${lvl.level}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'level', this.value)" style="width: 55px; font-weight: bold;" /></td>
-      <td><input type="number" step="0.01" value="${lvl.resGfa || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'resGfa', this.value)" class="numeric" style="width: 70px;" /></td>
-      <td><input type="number" step="0.01" value="${lvl.commGfa || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'commGfa', this.value)" class="numeric" style="width: 70px;" /></td>
-      <td><input type="number" step="0.01" value="${lvl.chaseWalls || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'chaseWalls', this.value)" class="numeric" style="width: 50px;" /></td>
-      <td><input type="number" step="0.01" value="${lvl.mechanical || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'mechanical', this.value)" class="numeric" style="width: 50px;" /></td>
-      <td><input type="number" step="0.01" value="${lvl.parking || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'parking', this.value)" class="numeric" style="width: 50px;" /></td>
-      <td><input type="number" step="0.01" value="${lvl.bikeParking || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'bikeParking', this.value)" class="numeric" style="width: 50px;" /></td>
-      <td><input type="number" step="0.01" value="${lvl.amenities || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'amenities', this.value)" class="numeric" style="width: 50px;" /></td>
-      <td><input type="number" step="0.01" value="${lvl.corridor || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'corridor', this.value)" class="numeric" style="width: 55px;" /></td>
-      <td><input type="number" step="0.01" value="${lvl.refuse || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'refuse', this.value)" class="numeric" style="width: 50px;" /></td>
-      <td class="numeric bold" id="net_${bldgLetter}_${idx}">${Number(lvl.netFloorArea || 0).toFixed(2)}</td>
-      <td class="numeric" id="energy_${bldgLetter}_${idx}">${Number(lvl.energyDeduction || 0).toFixed(2)}</td>
-      <td class="numeric bold" id="zfa_${bldgLetter}_${idx}" style="background: #f0f0f0;">${Number(lvl.zfa || 0).toFixed(2)}</td>
-      <td><input type="number" value="${lvl.studio || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'studio', this.value)" class="numeric" style="width: 40px;" /></td>
-      <td><input type="number" value="${lvl.oneBr || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'oneBr', this.value)" class="numeric" style="width: 40px;" /></td>
-      <td><input type="number" value="${lvl.twoBr || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'twoBr', this.value)" class="numeric" style="width: 40px;" /></td>
-      <td class="numeric bold" id="units_${bldgLetter}_${idx}">${lvl.totalUnits || 0}</td>
+  const buildings = currentLotData.buildings || [];
+
+  buildings.forEach((bldg, bldgIdx) => {
+    recalculateBuildingTotals(bldgIdx);
+
+    const bldgWrapper = document.createElement('div');
+    bldgWrapper.style.marginBottom = '20px';
+    bldgWrapper.innerHTML = `
+      <div style="background: #000; color: #fff; padding: 5px 8px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; border: 1px solid #000;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="text" value="${bldg.name || 'BUILDING ' + (bldgIdx + 1)}" onchange="renameBuilding(${bldgIdx}, this.value)" 
+                 style="background: transparent; color: #fff; font-weight: bold; border: 1px solid #555; padding: 2px 6px; width: 220px; font-size: 11px; text-transform: uppercase;" />
+        </div>
+        <div style="display: flex; gap: 4px;" class="no-print">
+          <button onclick="addFloorToBuilding(${bldgIdx})" class="excel-btn" style="padding: 2px 8px; font-size: 10px; background: #fff; color: #000;">
+            + ADD FLOOR
+          </button>
+          ${buildings.length > 1 ? `
+          <button onclick="deleteBuilding(${bldgIdx})" class="excel-btn" style="padding: 2px 8px; font-size: 10px; background: #333; color: #fff; border-color: #555;">
+            DELETE BUILDING
+          </button>` : ''}
+        </div>
+      </div>
+      <table class="excel-table" id="tableBldg_${bldgIdx}">
+        <thead>
+          <tr>
+            <th style="width: 70px;">LEVEL</th>
+            <th class="numeric">RES GFA</th>
+            <th class="numeric">COMM GFA</th>
+            <th class="numeric">CHASE</th>
+            <th class="numeric">MECH</th>
+            <th class="numeric">PARKING</th>
+            <th class="numeric">BIKE</th>
+            <th class="numeric">AMENITIES</th>
+            <th class="numeric">CORRIDOR</th>
+            <th class="numeric">REFUSE</th>
+            <th class="numeric">NET FA</th>
+            <th class="numeric">5% ENERGY</th>
+            <th class="numeric" style="background: #000; color: #fff;">ZFA</th>
+            <th style="text-align: center;">STUDIO</th>
+            <th style="text-align: center;">1BR</th>
+            <th style="text-align: center;">2BR</th>
+            <th style="text-align: center;" class="bold">TOTAL</th>
+            <th style="width: 35px; text-align: center;" class="no-print">DEL</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyBldg_${bldgIdx}"></tbody>
+        <tfoot id="tfootBldg_${bldgIdx}" style="background: #e6e6e6; font-weight: bold;"></tfoot>
+      </table>
     `;
-    tbody.appendChild(tr);
-  });
 
-  recalculateBuildingTotals(bldgLetter);
+    container.appendChild(bldgWrapper);
+
+    // Populate rows
+    const tbody = bldgWrapper.querySelector(`#tbodyBldg_${bldgIdx}`);
+    (bldg.levels || []).forEach((lvl, lvlIdx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="bold"><input type="text" value="${lvl.level}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'level', this.value)" style="width: 65px; font-weight: bold;" /></td>
+        <td><input type="number" step="0.01" value="${lvl.resGfa || 0}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'resGfa', this.value)" class="numeric" style="width: 70px;" /></td>
+        <td><input type="number" step="0.01" value="${lvl.commGfa || 0}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'commGfa', this.value)" class="numeric" style="width: 70px;" /></td>
+        <td><input type="number" step="0.01" value="${lvl.chaseWalls || 0}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'chaseWalls', this.value)" class="numeric" style="width: 50px;" /></td>
+        <td><input type="number" step="0.01" value="${lvl.mechanical || 0}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'mechanical', this.value)" class="numeric" style="width: 50px;" /></td>
+        <td><input type="number" step="0.01" value="${lvl.parking || 0}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'parking', this.value)" class="numeric" style="width: 50px;" /></td>
+        <td><input type="number" step="0.01" value="${lvl.bikeParking || 0}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'bikeParking', this.value)" class="numeric" style="width: 50px;" /></td>
+        <td><input type="number" step="0.01" value="${lvl.amenities || 0}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'amenities', this.value)" class="numeric" style="width: 50px;" /></td>
+        <td><input type="number" step="0.01" value="${lvl.corridor || 0}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'corridor', this.value)" class="numeric" style="width: 55px;" /></td>
+        <td><input type="number" step="0.01" value="${lvl.refuse || 0}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'refuse', this.value)" class="numeric" style="width: 50px;" /></td>
+        <td class="numeric bold" id="net_${bldgIdx}_${lvlIdx}">${Number(lvl.netFloorArea || 0).toFixed(2)}</td>
+        <td class="numeric" id="energy_${bldgIdx}_${lvlIdx}">${Number(lvl.energyDeduction || 0).toFixed(2)}</td>
+        <td class="numeric bold" id="zfa_${bldgIdx}_${lvlIdx}" style="background: #f0f0f0;">${Number(lvl.zfa || 0).toFixed(2)}</td>
+        <td><input type="number" value="${lvl.studio || 0}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'studio', this.value)" class="numeric" style="width: 40px;" /></td>
+        <td><input type="number" value="${lvl.oneBr || 0}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'oneBr', this.value)" class="numeric" style="width: 40px;" /></td>
+        <td><input type="number" value="${lvl.twoBr || 0}" onchange="updateFloorCell(${bldgIdx}, ${lvlIdx}, 'twoBr', this.value)" class="numeric" style="width: 40px;" /></td>
+        <td class="numeric bold" id="units_${bldgIdx}_${lvlIdx}">${lvl.totalUnits || 0}</td>
+        <td style="text-align: center;" class="no-print">
+          <button onclick="deleteFloor(${bldgIdx}, ${lvlIdx})" class="excel-btn" style="padding: 1px 4px; font-size: 10px;" title="Delete floor">X</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Populate foot totals
+    renderBuildingFoot(bldgIdx);
+  });
 }
 
-function updateFloorCell(bldgLetter, idx, field, value) {
-  const bldgKey = `building${bldgLetter}`;
-  const lvl = currentLotData[bldgKey].levels[idx];
+function renderBuildingFoot(bldgIdx) {
+  const bldg = currentLotData.buildings[bldgIdx];
+  const tfoot = document.getElementById(`tfootBldg_${bldgIdx}`);
+  if (!tfoot || !bldg.totals) return;
+  const t = bldg.totals;
+
+  tfoot.innerHTML = `
+    <tr>
+      <td class="bold">TOTALS</td>
+      <td class="numeric bold">${t.resGfa.toFixed(2)}</td>
+      <td class="numeric bold">${t.commGfa.toFixed(2)}</td>
+      <td class="numeric bold">${t.chaseWalls.toFixed(2)}</td>
+      <td class="numeric bold">${t.mechanical.toFixed(2)}</td>
+      <td class="numeric bold">${t.parking.toFixed(2)}</td>
+      <td class="numeric bold">${t.bikeParking.toFixed(2)}</td>
+      <td class="numeric bold">${t.amenities.toFixed(2)}</td>
+      <td class="numeric bold">${t.corridor.toFixed(2)}</td>
+      <td class="numeric bold">${t.refuse.toFixed(2)}</td>
+      <td class="numeric bold">${t.netFloorArea.toFixed(2)}</td>
+      <td class="numeric bold">${t.energyDeduction.toFixed(2)}</td>
+      <td class="numeric bold" style="background: #000; color: #fff;">${t.zfa.toFixed(2)}</td>
+      <td class="numeric bold">${t.studio}</td>
+      <td class="numeric bold">${t.oneBr}</td>
+      <td class="numeric bold">${t.twoBr}</td>
+      <td class="numeric bold">${t.totalUnits}</td>
+      <td class="no-print"></td>
+    </tr>
+  `;
+}
+
+function updateFloorCell(bldgIdx, lvlIdx, field, value) {
+  const bldg = currentLotData.buildings[bldgIdx];
+  const lvl = bldg.levels[lvlIdx];
   lvl[field] = field === 'level' ? value : (parseFloat(value) || 0);
 
   const totalGfa = (lvl.resGfa || 0) + (lvl.commGfa || 0);
@@ -543,18 +653,24 @@ function updateFloorCell(bldgLetter, idx, field, value) {
 
   lvl.totalUnits = (lvl.studio || 0) + (lvl.oneBr || 0) + (lvl.twoBr || 0);
 
-  document.getElementById(`net_${bldgLetter}_${idx}`).innerText = lvl.netFloorArea.toFixed(2);
-  document.getElementById(`energy_${bldgLetter}_${idx}`).innerText = lvl.energyDeduction.toFixed(2);
-  document.getElementById(`zfa_${bldgLetter}_${idx}`).innerText = lvl.zfa.toFixed(2);
-  document.getElementById(`units_${bldgLetter}_${idx}`).innerText = lvl.totalUnits;
+  const netEl = document.getElementById(`net_${bldgIdx}_${lvlIdx}`);
+  const energyEl = document.getElementById(`energy_${bldgIdx}_${lvlIdx}`);
+  const zfaEl = document.getElementById(`zfa_${bldgIdx}_${lvlIdx}`);
+  const unitsEl = document.getElementById(`units_${bldgIdx}_${lvlIdx}`);
 
-  recalculateBuildingTotals(bldgLetter);
+  if (netEl) netEl.innerText = lvl.netFloorArea.toFixed(2);
+  if (energyEl) energyEl.innerText = lvl.energyDeduction.toFixed(2);
+  if (zfaEl) zfaEl.innerText = lvl.zfa.toFixed(2);
+  if (unitsEl) unitsEl.innerText = lvl.totalUnits;
+
+  recalculateBuildingTotals(bldgIdx);
+  renderBuildingFoot(bldgIdx);
   updateCombinedTotals();
 }
 
-function recalculateBuildingTotals(bldgLetter) {
-  const bldgKey = `building${bldgLetter}`;
-  const levels = currentLotData[bldgKey].levels;
+function recalculateBuildingTotals(bldgIdx) {
+  const bldg = currentLotData.buildings[bldgIdx];
+  const levels = bldg.levels || [];
 
   const totals = {
     resGfa: 0, commGfa: 0, chaseWalls: 0, mechanical: 0, parking: 0, bikeParking: 0, amenities: 0, corridor: 0, refuse: 0,
@@ -580,49 +696,119 @@ function recalculateBuildingTotals(bldgLetter) {
     totals.totalUnits += l.totalUnits || 0;
   });
 
-  currentLotData[bldgKey].totals = totals;
-
-  const tfoot = document.getElementById(`tfootBldg${bldgLetter}`);
-  tfoot.innerHTML = `
-    <tr>
-      <td class="bold">TOTALS</td>
-      <td class="numeric bold">${totals.resGfa.toFixed(2)}</td>
-      <td class="numeric bold">${totals.commGfa.toFixed(2)}</td>
-      <td class="numeric bold">${totals.chaseWalls.toFixed(2)}</td>
-      <td class="numeric bold">${totals.mechanical.toFixed(2)}</td>
-      <td class="numeric bold">${totals.parking.toFixed(2)}</td>
-      <td class="numeric bold">${totals.bikeParking.toFixed(2)}</td>
-      <td class="numeric bold">${totals.amenities.toFixed(2)}</td>
-      <td class="numeric bold">${totals.corridor.toFixed(2)}</td>
-      <td class="numeric bold">${totals.refuse.toFixed(2)}</td>
-      <td class="numeric bold">${totals.netFloorArea.toFixed(2)}</td>
-      <td class="numeric bold">${totals.energyDeduction.toFixed(2)}</td>
-      <td class="numeric bold" style="background: #000; color: #fff;">${totals.zfa.toFixed(2)}</td>
-      <td class="numeric bold">${totals.studio}</td>
-      <td class="numeric bold">${totals.oneBr}</td>
-      <td class="numeric bold">${totals.twoBr}</td>
-      <td class="numeric bold">${totals.totalUnits}</td>
-    </tr>
-  `;
+  bldg.totals = totals;
 }
 
-function addFloorRow(bldgLetter) {
-  const bldgKey = `building${bldgLetter}`;
-  const count = currentLotData[bldgKey].levels.length;
-  currentLotData[bldgKey].levels.push({
-    level: `${count}TH`, resGfa: 4000, commGfa: 0, chaseWalls: 100, mechanical: 0, parking: 0, bikeParking: 0, amenities: 0,
-    corridor: 300, refuse: 20, netFloorArea: 3580, energyDeduction: 179, zfa: 3401, studio: 1, oneBr: 2, twoBr: 4, totalUnits: 7
-  });
-  renderExcelBuildingTable(bldgLetter, currentLotData[bldgKey]);
+function renameBuilding(bldgIdx, newName) {
+  if (currentLotData.buildings[bldgIdx]) {
+    currentLotData.buildings[bldgIdx].name = newName.toUpperCase();
+    updateCsvPreview();
+  }
+}
+
+function addFloorToBuilding(bldgIdx) {
+  const bldg = currentLotData.buildings[bldgIdx];
+  const nextNum = bldg.levels.length;
+  const suffix = (nextNum === 1) ? '1ST' : (nextNum === 2) ? '2ND' : (nextNum === 3) ? '3RD' : `${nextNum}TH`;
+
+  const newFloor = {
+    level: suffix,
+    resGfa: 4000,
+    commGfa: 0,
+    chaseWalls: 100,
+    mechanical: 0,
+    parking: 0,
+    bikeParking: 0,
+    amenities: 0,
+    corridor: 300,
+    refuse: 20,
+    netFloorArea: 3580,
+    energyDeduction: 179,
+    zfa: 3401,
+    studio: 1,
+    oneBr: 2,
+    twoBr: 4,
+    totalUnits: 7
+  };
+
+  // If last floor is ROOF, insert right before ROOF
+  if (bldg.levels.length > 0 && bldg.levels[bldg.levels.length - 1].level.toUpperCase().includes('ROOF')) {
+    bldg.levels.splice(bldg.levels.length - 1, 0, newFloor);
+  } else {
+    bldg.levels.push(newFloor);
+  }
+
+  recalculateBuildingTotals(bldgIdx);
+  renderAllBuildings();
   updateCombinedTotals();
+  updateCsvPreview();
+}
+
+function deleteFloor(bldgIdx, lvlIdx) {
+  const bldg = currentLotData.buildings[bldgIdx];
+  if (bldg.levels.length <= 1) {
+    alert('A building must contain at least 1 floor level.');
+    return;
+  }
+  bldg.levels.splice(lvlIdx, 1);
+  recalculateBuildingTotals(bldgIdx);
+  renderAllBuildings();
+  updateCombinedTotals();
+  updateCsvPreview();
+}
+
+function addNewBuildingPrompt() {
+  const nextChar = String.fromCharCode(65 + currentLotData.buildings.length);
+  const defaultName = `BUILDING ${nextChar}`;
+  const inputName = prompt('Enter New Building Name:', defaultName) || defaultName;
+
+  const newBldg = {
+    id: nextChar,
+    name: inputName.toUpperCase(),
+    levels: [
+      { level: 'CELLAR', resGfa: 6000, commGfa: 0, chaseWalls: 0, mechanical: 0, parking: 0, bikeParking: 0, amenities: 0, corridor: 6000, refuse: 0, netFloorArea: 0, energyDeduction: 0, zfa: 0, studio: 0, oneBr: 0, twoBr: 0, totalUnits: 0 },
+      { level: '1ST', resGfa: 6000, commGfa: 0, chaseWalls: 0, mechanical: 100, parking: 2500, bikeParking: 250, amenities: 0, corridor: 200, refuse: 100, netFloorArea: 2850, energyDeduction: 142.5, zfa: 2707.5, studio: 0, oneBr: 0, twoBr: 0, totalUnits: 0 },
+      { level: '2ND', resGfa: 4500, commGfa: 0, chaseWalls: 120, mechanical: 0, parking: 0, bikeParking: 0, amenities: 0, corridor: 350, refuse: 20, netFloorArea: 4010, energyDeduction: 200.5, zfa: 3809.5, studio: 2, oneBr: 2, twoBr: 4, totalUnits: 8 },
+      { level: '3RD', resGfa: 4500, commGfa: 0, chaseWalls: 120, mechanical: 0, parking: 0, bikeParking: 0, amenities: 0, corridor: 350, refuse: 20, netFloorArea: 4010, energyDeduction: 200.5, zfa: 3809.5, studio: 2, oneBr: 2, twoBr: 4, totalUnits: 8 },
+      { level: 'ROOF', resGfa: 500, commGfa: 0, chaseWalls: 0, mechanical: 0, parking: 0, bikeParking: 0, amenities: 350, corridor: 0, refuse: 0, netFloorArea: 150, energyDeduction: 7.5, zfa: 142.5, studio: 0, oneBr: 0, twoBr: 0, totalUnits: 0 }
+    ],
+    totals: {}
+  };
+
+  currentLotData.buildings.push(newBldg);
+  recalculateBuildingTotals(currentLotData.buildings.length - 1);
+  renderAllBuildings();
+  updateCombinedTotals();
+  updateCsvPreview();
+}
+
+function deleteBuilding(bldgIdx) {
+  if (currentLotData.buildings.length <= 1) {
+    alert('At least one building is required in the zoning schedule.');
+    return;
+  }
+  const bldg = currentLotData.buildings[bldgIdx];
+  if (confirm(`Are you sure you want to delete ${bldg.name}?`)) {
+    currentLotData.buildings.splice(bldgIdx, 1);
+    renderAllBuildings();
+    updateCombinedTotals();
+    updateCsvPreview();
+  }
 }
 
 function updateCombinedTotals() {
-  const totA = currentLotData.buildingA.totals || {};
-  const totB = currentLotData.buildingB.totals || {};
+  const buildings = currentLotData.buildings || [];
 
-  const totalZfa = (totA.zfa || 0) + (totB.zfa || 0);
-  const totalUnits = (totA.totalUnits || 0) + (totB.totalUnits || 0);
+  let totalZfa = 0;
+  let totalUnits = 0;
+
+  buildings.forEach(b => {
+    if (b.totals) {
+      totalZfa += Number(b.totals.zfa || 0);
+      totalUnits += Number(b.totals.totalUnits || 0);
+    }
+  });
+
   const affordable485x = Math.round(totalUnits * 0.25);
   const marketUnits = totalUnits - affordable485x;
   const bikeSpaces = Math.ceil(totalUnits / 2);

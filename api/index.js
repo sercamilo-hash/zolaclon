@@ -53,8 +53,17 @@ app.get('/api/lot', async (req, res) => {
     const plutoRow = data.rows[0];
     const resolved = resolveZoningInfo(plutoRow);
 
-    resolved.buildingA = getDefaultBuildingA();
-    resolved.buildingB = getDefaultBuildingB();
+    const bA = getDefaultBuildingA();
+    bA.id = 'A';
+    bA.name = 'BUILDING A';
+
+    const bB = getDefaultBuildingB();
+    bB.id = 'B';
+    bB.name = 'BUILDING B';
+
+    resolved.buildings = [bA, bB];
+    resolved.buildingA = bA;
+    resolved.buildingB = bB;
     resolved.zrClauses = getDefaultZrClauses(resolved.propertyInfo);
     resolved.rawPluto = plutoRow;
 

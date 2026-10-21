@@ -687,74 +687,19 @@
 
       <!-- SHEET 2: BUILDING SCHEDULES -->
       <div id="sheetBuilding" style="padding: 10px; display: none; overflow-x: auto;">
-        <!-- Building A -->
-        <div style="margin-bottom: 15px;">
-          <div style="background: #000; color: #fff; padding: 4px 8px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
-            <span>BUILDING A - FLOOR-BY-FLOOR SCHEDULE</span>
-            <button onclick="addFloorRow('A')" class="excel-btn no-print" style="padding: 1px 6px; font-size: 10px;">+ ADD ROW</button>
-          </div>
-          <table class="excel-table" id="tableBldgA">
-            <thead>
-              <tr>
-                <th>LEVEL</th>
-                <th class="numeric">RES GFA</th>
-                <th class="numeric">COMM GFA</th>
-                <th class="numeric">CHASE</th>
-                <th class="numeric">MECH</th>
-                <th class="numeric">PARKING</th>
-                <th class="numeric">BIKE</th>
-                <th class="numeric">AMENITIES</th>
-                <th class="numeric">CORRIDOR</th>
-                <th class="numeric">REFUSE</th>
-                <th class="numeric">NET FA</th>
-                <th class="numeric">5% ENERGY</th>
-                <th class="numeric" style="background: #000; color: #fff;">ZFA</th>
-                <th style="text-align: center;">STUDIO</th>
-                <th style="text-align: center;">1BR</th>
-                <th style="text-align: center;">2BR</th>
-                <th style="text-align: center;" class="bold">TOTAL</th>
-              </tr>
-            </thead>
-            <tbody id="tbodyBldgA"></tbody>
-            <tfoot id="tfootBldgA" style="background: #e6e6e6; font-weight: bold;"></tfoot>
-          </table>
+        <!-- Top Action Bar for Buildings -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; background: #e6e6e6; padding: 6px 10px; border: 1px solid #000;">
+          <span style="font-weight: bold; text-transform: uppercase;">MULTI-BUILDING ZONING SCHEDULE MANAGER</span>
+          <button onclick="addNewBuildingPrompt()" class="excel-btn no-print" style="background: #000; color: #fff; padding: 4px 12px;">
+            + ADD NEW BUILDING
+          </button>
         </div>
 
-        <!-- Building B -->
-        <div style="margin-bottom: 15px;">
-          <div style="background: #000; color: #fff; padding: 4px 8px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
-            <span>BUILDING B - FLOOR-BY-FLOOR SCHEDULE</span>
-            <button onclick="addFloorRow('B')" class="excel-btn no-print" style="padding: 1px 6px; font-size: 10px;">+ ADD ROW</button>
-          </div>
-          <table class="excel-table" id="tableBldgB">
-            <thead>
-              <tr>
-                <th>LEVEL</th>
-                <th class="numeric">RES GFA</th>
-                <th class="numeric">COMM GFA</th>
-                <th class="numeric">CHASE</th>
-                <th class="numeric">MECH</th>
-                <th class="numeric">PARKING</th>
-                <th class="numeric">BIKE</th>
-                <th class="numeric">AMENITIES</th>
-                <th class="numeric">CORRIDOR</th>
-                <th class="numeric">REFUSE</th>
-                <th class="numeric">NET FA</th>
-                <th class="numeric">5% ENERGY</th>
-                <th class="numeric" style="background: #000; color: #fff;">ZFA</th>
-                <th style="text-align: center;">STUDIO</th>
-                <th style="text-align: center;">1BR</th>
-                <th style="text-align: center;">2BR</th>
-                <th style="text-align: center;" class="bold">TOTAL</th>
-              </tr>
-            </thead>
-            <tbody id="tbodyBldgB"></tbody>
-            <tfoot id="tfootBldgB" style="background: #e6e6e6; font-weight: bold;"></tfoot>
-          </table>
-        </div>
+        <!-- Dynamic Container for all Building Tables -->
+        <div id="buildingsContainer"></div>
 
         <!-- Consolidated Summary -->
-        <table class="excel-table">
+        <table class="excel-table" style="margin-top: 15px;">
           <thead>
             <tr>
               <th colspan="2" class="header-cell">CONSOLIDATED TOTALS & 485X AFFORDABILITY</th>
