@@ -42,5 +42,5 @@
 ## 🚀 Despliegue en Vercel
 
 1. Entra a [https://vercel.com/new](https://vercel.com/new) con tu cuenta de GitHub.
-2. Importa el repositorio **`sercamilo-hash/zolaclon`**.
+2. Importa el repositorio **`sercamilo-hash/zr-plus`**.
 3. Haz clic en **Deploy**.
