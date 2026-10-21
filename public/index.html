@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NYC ZoLa Clone - Zoning Resolution & Analysis Generator</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <!-- SheetJS for Excel export -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <style>
+    @media print {
+      body { background: white !important; color: black !important; }
+      .no-print { display: none !important; }
+      .print-full { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+    }
+    .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-slate-900 text-white shadow-md z-30 sticky top-0 border-b border-slate-700">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="bg-blue-600 text-white p-2 rounded-lg font-black text-xl tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-layer-group"></i> ZoLa <span class="text-xs bg-blue-800 text-blue-200 px-1.5 py-0.5 rounded font-normal">ZR CLONE</span>
+        </div>
+        <div>
+          <h1 class="text-sm font-semibold text-white">NYC Zoning Resolution & Analysis Tool</h1>
+          <p class="text-xs text-slate-400">MapPLUTO + City of Yes (UAP) + Custom ZR Formatter</p>
+        </div>
+      </div>
+
+      <!-- Quick Search Bar -->
+      <div class="relative flex-1 max-w-lg min-w-[280px]">
+        <div class="relative">
+          <input 
+            type="text" 
+            id="searchInput" 
+            placeholder="Buscar por dirección (ej: 604 Union St, Brooklyn) o BBL..." 
+            class="w-full bg-slate-800 text-white placeholder-slate-400 text-sm rounded-lg pl-10 pr-10 py-2 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400"></i>
+          <button id="clearSearch" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-white">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <!-- Search Results Dropdown -->
+        <div id="searchResults" class="hidden absolute left-0 right-0 top-11 bg-white text-slate-900 rounded-lg shadow-2xl border border-slate-200 max-h-80 overflow-y-auto custom-scroll z-50"></div>
+      </div>
+
+      <!-- Export Actions -->
+      <div class="flex items-center gap-2 no-print">
+        <button id="btnExportCsv" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition">
+          <i class="fa-solid fa-file-csv text-base"></i> Exportar CSV (Tu Formato)
+        </button>
+        <button id="btnExportExcel" class="bg-green-700 hover:bg-green-800 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition">
+          <i class="fa-solid fa-file-excel text-base"></i> Excel (.xlsx)
+        </button>
+        <button onclick="window.print()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition">
+          <i class="fa-solid fa-print"></i> Imprimir
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <div class="flex-1 max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-5">
+    
+    <!-- Left Column: Map & Lot Quick Card (4 cols) -->
+    <div class="lg:col-span-4 flex flex-col gap-4 no-print">
+      <!-- Mini Map Box -->
+      <div class="bg-white rounded-xl shadow border border-slate-200 overflow-hidden flex flex-col h-[320px]">
+        <div class="bg-slate-800 text-white text-xs font-semibold px-3 py-2 flex items-center justify-between">
+          <span><i class="fa-solid fa-map-location-dot mr-1.5 text-blue-400"></i> NYC Tax Lot Map</span>
+          <span id="mapStatusBadge" class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[11px]">Listo</span>
+        </div>
+        <div id="map" class="flex-1 w-full z-10"></div>
+      </div>
+
+      <!-- Quick Property Card -->
+      <div class="bg-white rounded-xl shadow border border-slate-200 p-4">
+        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+          <span>Resumen de la Parcela</span>
+          <span id="activeBblBadge" class="text-blue-600 font-mono text-xs">BBL: 4161300035</span>
+        </h3>
+        <div id="quickPropertySummary" class="space-y-2 text-sm">
+          <div class="p-2.5 bg-blue-50 rounded-lg border border-blue-100">
+            <div class="text-xs text-blue-600 font-medium">Dirección / Ubicación</div>
+            <div id="summaryAddress" class="font-bold text-slate-900 text-base">Cargando lote...</div>
+            <div id="summaryBoroughBlock" class="text-xs text-slate-600 mt-0.5">Borough: - | Block: - | Lot: -</div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div class="p-2 bg-slate-50 rounded border border-slate-100">
+              <span class="text-slate-500 block">Zonificación:</span>
+              <span id="summaryZoning" class="font-bold text-blue-700 text-sm">-</span>
+            </div>
+            <div class="p-2 bg-slate-50 rounded border border-slate-100">
+              <span class="text-slate-500 block">Área de Lote:</span>
+              <span id="summaryLotArea" class="font-bold text-slate-800 text-sm">- SF</span>
+            </div>
+            <div class="p-2 bg-slate-50 rounded border border-slate-100">
+              <span class="text-slate-500 block">Distrito Especial:</span>
+              <span id="summarySpecialDist" class="font-semibold text-slate-700 text-[11px] truncate block">-</span>
+            </div>
+            <div class="p-2 bg-slate-50 rounded border border-slate-100">
+              <span class="text-slate-500 block">Transit Zone:</span>
+              <span id="summaryTransit" class="font-semibold text-emerald-700 text-[11px]">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preset Demo Buttons -->
+      <div class="bg-white rounded-xl shadow border border-slate-200 p-3">
+        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Ejemplos Rápidos</div>
+        <div class="flex flex-col gap-1.5">
+          <button onclick="loadDemoProperty('4161300035')" class="text-left text-xs bg-slate-50 hover:bg-blue-50 p-2 rounded border border-slate-200 hover:border-blue-300 transition flex justify-between items-center">
+            <span><strong>Queens Block 16130 Lot 35</strong> (R6)</span>
+            <i class="fa-solid fa-chevron-right text-slate-400 text-[10px]"></i>
+          </button>
+          <button onclick="loadDemoAddress('604 Union Street, Brooklyn')" class="text-left text-xs bg-slate-50 hover:bg-blue-50 p-2 rounded border border-slate-200 hover:border-blue-300 transition flex justify-between items-center">
+            <span><strong>604 Union St, BK</strong> (M1-4/R7A Gowanus)</span>
+            <i class="fa-solid fa-chevron-right text-slate-400 text-[10px]"></i>
+          </button>
+          <button onclick="loadDemoAddress('120 Broadway, Manhattan')" class="text-left text-xs bg-slate-50 hover:bg-blue-50 p-2 rounded border border-slate-200 hover:border-blue-300 transition flex justify-between items-center">
+            <span><strong>120 Broadway, MN</strong> (C5-5 Equitable)</span>
+            <i class="fa-solid fa-chevron-right text-slate-400 text-[10px]"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Full Zoning Analysis & Schedule Tables (8 cols) -->
+    <div class="lg:col-span-8 flex flex-col gap-5 print-full">
+
+      <!-- Navigation Tabs -->
+      <div class="bg-white rounded-xl shadow border border-slate-200 p-1 flex gap-1 no-print">
+        <button id="tabBtn1" onclick="switchTab('zoning')" class="tab-btn flex-1 py-2 px-3 text-xs font-bold rounded-lg bg-blue-600 text-white transition flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-calculator"></i> 1. Zoning Analysis & FAR
+        </button>
+        <button id="tabBtn2" onclick="switchTab('building')" class="tab-btn flex-1 py-2 px-3 text-xs font-bold rounded-lg text-slate-600 hover:bg-slate-100 transition flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-building"></i> 2. Floor Schedules (Bldg A/B)
+        </button>
+        <button id="tabBtn3" onclick="switchTab('clauses')" class="tab-btn flex-1 py-2 px-3 text-xs font-bold rounded-lg text-slate-600 hover:bg-slate-100 transition flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-book-bookmark"></i> 3. Cláusulas ZR Resolution
+        </button>
+        <button id="tabBtn4" onclick="switchTab('preview')" class="tab-btn flex-1 py-2 px-3 text-xs font-bold rounded-lg text-slate-600 hover:bg-slate-100 transition flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-file-lines"></i> 4. Vista Previa CSV
+        </button>
+      </div>
+
+      <!-- TAB 1: ZONING ANALYSIS (Property Info, FAR, Lot Coverage, Yards, Height, Parking) -->
+      <div id="tabContentZoning" class="tab-content flex flex-col gap-4">
+
+        <!-- 1.1 Property Information Section -->
+        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
+          <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+            <h2 class="text-sm font-black text-slate-900 tracking-wide uppercase flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-blue-600"></span> Property Information
+            </h2>
+            <span class="text-xs bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded">Zoning Resolution Sheet</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">BOROUGH</label>
+              <input id="propBorough" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-bold" />
+            </div>
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">BLOCK</label>
+              <input id="propBlock" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-bold" />
+            </div>
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">LOT</label>
+              <input id="propLot" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-bold" />
+            </div>
+
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">ZONING DISTRICT</label>
+              <input id="propZoningDistrict" type="text" class="w-full bg-blue-50 border border-blue-200 text-blue-900 rounded p-1.5 font-bold" />
+            </div>
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">SPECIAL ZONING DISTRICT</label>
+              <input id="propSpecialDistrict" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
+            </div>
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">SPECIAL SUBDISTRICT</label>
+              <input id="propSpecialSubdistrict" type="text" value="N/A" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
+            </div>
+
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">TOTAL LOT AREA (SF)</label>
+              <input id="propLotArea" type="number" step="0.01" onchange="recalculateZoning()" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-bold text-slate-900" />
+            </div>
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">LOT TYPE</label>
+              <select id="propLotType" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium">
+                <option value="INTERIOR LOT">INTERIOR LOT</option>
+                <option value="CORNER LOT">CORNER LOT</option>
+                <option value="THROUGH LOT">THROUGH LOT</option>
+                <option value="THROUGH LOT, INTERIOR LOT">THROUGH LOT, INTERIOR LOT</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">SHALLOW LOT</label>
+              <select id="propShallowLot" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium">
+                <option value="YES">YES</option>
+                <option value="NO">NO</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">MIH SITE</label>
+              <input id="propMihSite" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
+            </div>
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">FLOOD ZONE</label>
+              <input id="propFloodZone" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
+            </div>
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">ELEGIBLE SITE</label>
+              <input id="propEligibleSite" type="text" value="YES" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
+            </div>
+
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">OER HAZARD</label>
+              <input id="propOerHazard" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
+            </div>
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">COMMUNITY BOARD</label>
+              <input id="propCommunityBoard" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
+            </div>
+            <div>
+              <label class="block text-slate-400 font-semibold mb-1">ZONING MAP</label>
+              <input id="propZoningMap" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 1.2 Floor Area (Residential & Commercial) -->
+        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
+          <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+            <h2 class="text-sm font-black text-slate-900 tracking-wide uppercase flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> Floor Area & FAR Regulations
+            </h2>
+            <span class="text-xs text-slate-500">Incluye City of Yes (UAP)</span>
+          </div>
+
+          <!-- Residential Table -->
+          <div class="overflow-x-auto mb-4">
+            <table class="w-full text-xs text-left border border-slate-200 rounded-lg overflow-hidden">
+              <thead class="bg-slate-100 text-slate-700 font-bold">
+                <tr>
+                  <th class="p-2 border-b">RESIDENTIAL FLOOR AREA</th>
+                  <th class="p-2 border-b text-center">MAX FAR</th>
+                  <th class="p-2 border-b text-right">MAX ZFA (SF)</th>
+                  <th class="p-2 border-b text-right">PROPOSED</th>
+                  <th class="p-2 border-b text-right">REMAINING</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 font-medium">
+                <tr>
+                  <td class="p-2 font-semibold">RESIDENTIAL FLOOR AREA STANDARD</td>
+                  <td class="p-2 text-center"><input id="resFarStd" type="number" step="0.01" onchange="recalculateZoning()" class="w-16 text-center border rounded p-1" /></td>
+                  <td class="p-2 text-right font-mono" id="resZfaStd">-</td>
+                  <td class="p-2 text-right"><input id="resPropStd" type="number" step="0.01" onchange="recalculateZoning()" value="0" class="w-24 text-right border rounded p-1" /></td>
+                  <td class="p-2 text-right font-mono font-bold text-emerald-600" id="resRemStd">-</td>
+                </tr>
+                <tr>
+                  <td class="p-2 font-semibold">RESIDENTIAL FLOOR AREA STANDARD + 20% (UAP)</td>
+                  <td class="p-2 text-center"><input id="resFarUap" type="number" step="0.01" onchange="recalculateZoning()" class="w-16 text-center border rounded p-1 font-bold text-blue-600" /></td>
+                  <td class="p-2 text-right font-mono font-bold text-blue-900" id="resZfaUap">-</td>
+                  <td class="p-2 text-right"><input id="resPropUap" type="number" step="0.01" onchange="recalculateZoning()" value="0" class="w-24 text-right border rounded p-1" /></td>
+                  <td class="p-2 text-right font-mono font-bold text-emerald-600" id="resRemUap">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Amenities Deductions -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-4">
+            <div class="p-2.5 bg-slate-50 border border-slate-200 rounded flex justify-between items-center">
+              <span class="font-semibold text-slate-700">ALLOWED AMENITIES DEDUCTIONS (5%):</span>
+              <span id="resAllowedAmenities" class="font-mono font-bold text-slate-900">- SF</span>
+            </div>
+            <div class="p-2.5 bg-slate-50 border border-slate-200 rounded flex justify-between items-center">
+              <span class="font-semibold text-slate-700">REQUIRED AMENITIES (3%):</span>
+              <span id="resRequiredAmenities" class="font-mono font-bold text-slate-900">- SF</span>
+            </div>
+          </div>
+
+          <!-- Commercial Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-left border border-slate-200 rounded-lg overflow-hidden">
+              <thead class="bg-slate-100 text-slate-700 font-bold">
+                <tr>
+                  <th class="p-2 border-b">COMMERCIAL FLOOR AREA</th>
+                  <th class="p-2 border-b text-center">MAX FAR</th>
+                  <th class="p-2 border-b text-right">MAX ZFA (SF)</th>
+                  <th class="p-2 border-b text-right">PROPOSED</th>
+                  <th class="p-2 border-b text-right">REMAINING</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 font-medium">
+                <tr>
+                  <td class="p-2 font-semibold">COMMERCIAL FLOOR AREA</td>
+                  <td class="p-2 text-center"><input id="commFarInput" type="number" step="0.01" onchange="recalculateZoning()" class="w-16 text-center border rounded p-1" /></td>
+                  <td class="p-2 text-right font-mono" id="commZfaMax">-</td>
+                  <td class="p-2 text-right"><input id="commPropInput" type="number" step="0.01" onchange="recalculateZoning()" value="0" class="w-24 text-right border rounded p-1" /></td>
+                  <td class="p-2 text-right font-mono font-bold text-emerald-600" id="commRem">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 1.3 Lot Coverage, Yards, Height, Density & Parking -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Lot Coverage & Yards -->
+          <div class="bg-white rounded-xl shadow border border-slate-200 p-4 text-xs">
+            <h3 class="font-bold text-slate-900 uppercase border-b pb-2 mb-3">Lot Coverage & Yards</h3>
+            <div class="space-y-2">
+              <div class="flex justify-between items-center">
+                <span>Res. Coverage within 100' corner:</span>
+                <span class="font-bold">1.0 (100%)</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span>Res. Coverage beyond 100' corner:</span>
+                <span class="font-bold">0.65 (65%)</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span>Front Yard:</span>
+                <span class="font-bold text-slate-600">NOT REQUIRED</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span>Side Yard:</span>
+                <span class="font-bold text-slate-600">NOT REQUIRED</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span>Rear Yard (< 75'-0"):</span>
+                <span class="font-bold">10'-0" Allowed | 10'-4" Prop.</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span>Rear Yard (> 75'-0"):</span>
+                <span class="font-bold">30'-0" Allowed</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Height, Setback, Density & Parking -->
+          <div class="bg-white rounded-xl shadow border border-slate-200 p-4 text-xs">
+            <h3 class="font-bold text-slate-900 uppercase border-b pb-2 mb-3">Height, Density & Parking</h3>
+            <div class="space-y-2">
+              <div class="flex justify-between items-center">
+                <span>Min Base Height:</span>
+                <span id="hMinBase" class="font-bold">30'-0"</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span>Max Base Height:</span>
+                <span id="hMaxBase" class="font-bold">65'-0"</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span>Max Building Height:</span>
+                <span id="hMaxBldg" class="font-bold text-blue-700">125'-0"</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span>Max Allowed Density (Units):</span>
+                <span id="densityMaxUnits" class="font-bold font-mono text-emerald-700 text-sm">126</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span>Parking Transit Zone:</span>
+                <span id="pkTransitZone" class="font-semibold text-slate-700 text-[11px]">SPECIAL 25-241</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span>Bicycle Parking Spaces:</span>
+                <span id="pkBikeSpaces" class="font-bold font-mono">63</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TAB 2: FLOOR SCHEDULES (Building A, Building B, Consolidation) -->
+      <div id="tabContentBuilding" class="tab-content hidden flex flex-col gap-5">
+        
+        <!-- Building A -->
+        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
+          <div class="flex items-center justify-between border-b pb-3 mb-3">
+            <h2 class="text-sm font-black text-slate-900 tracking-wide uppercase flex items-center gap-2">
+              <i class="fa-solid fa-hotel text-blue-600"></i> Building A - Floor-by-Floor Schedule
+            </h2>
+            <button onclick="addFloorRow('A')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded font-semibold transition">
+              <i class="fa-solid fa-plus mr-1"></i> Agregar Nivel
+            </button>
+          </div>
+          <div class="overflow-x-auto custom-scroll">
+            <table class="w-full text-xs text-left border border-slate-200 rounded min-w-[900px]" id="tableBldgA">
+              <thead class="bg-slate-800 text-white text-[11px]">
+                <tr>
+                  <th class="p-1.5 border">LEVEL</th>
+                  <th class="p-1.5 border text-right">RES GFA</th>
+                  <th class="p-1.5 border text-right">COMM GFA</th>
+                  <th class="p-1.5 border text-right">CHASE</th>
+                  <th class="p-1.5 border text-right">MECH</th>
+                  <th class="p-1.5 border text-right">PARKING</th>
+                  <th class="p-1.5 border text-right">BIKE</th>
+                  <th class="p-1.5 border text-right">AMENITIES</th>
+                  <th class="p-1.5 border text-right">CORRIDOR</th>
+                  <th class="p-1.5 border text-right">REFUSE</th>
+                  <th class="p-1.5 border text-right">NET FA</th>
+                  <th class="p-1.5 border text-right">5% ENERGY</th>
+                  <th class="p-1.5 border text-right bg-blue-900">ZFA</th>
+                  <th class="p-1.5 border text-center">STUDIO</th>
+                  <th class="p-1.5 border text-center">1BR</th>
+                  <th class="p-1.5 border text-center">2BR</th>
+                  <th class="p-1.5 border text-center font-bold">TOTAL</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyBldgA" class="divide-y divide-slate-100"></tbody>
+              <tfoot id="tfootBldgA" class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300"></tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- Building B -->
+        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
+          <div class="flex items-center justify-between border-b pb-3 mb-3">
+            <h2 class="text-sm font-black text-slate-900 tracking-wide uppercase flex items-center gap-2">
+              <i class="fa-solid fa-city text-emerald-600"></i> Building B - Floor-by-Floor Schedule
+            </h2>
+            <button onclick="addFloorRow('B')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded font-semibold transition">
+              <i class="fa-solid fa-plus mr-1"></i> Agregar Nivel
+            </button>
+          </div>
+          <div class="overflow-x-auto custom-scroll">
+            <table class="w-full text-xs text-left border border-slate-200 rounded min-w-[900px]" id="tableBldgB">
+              <thead class="bg-slate-800 text-white text-[11px]">
+                <tr>
+                  <th class="p-1.5 border">LEVEL</th>
+                  <th class="p-1.5 border text-right">RES GFA</th>
+                  <th class="p-1.5 border text-right">COMM GFA</th>
+                  <th class="p-1.5 border text-right">CHASE</th>
+                  <th class="p-1.5 border text-right">MECH</th>
+                  <th class="p-1.5 border text-right">PARKING</th>
+                  <th class="p-1.5 border text-right">BIKE</th>
+                  <th class="p-1.5 border text-right">AMENITIES</th>
+                  <th class="p-1.5 border text-right">CORRIDOR</th>
+                  <th class="p-1.5 border text-right">REFUSE</th>
+                  <th class="p-1.5 border text-right">NET FA</th>
+                  <th class="p-1.5 border text-right">5% ENERGY</th>
+                  <th class="p-1.5 border text-right bg-emerald-900">ZFA</th>
+                  <th class="p-1.5 border text-center">STUDIO</th>
+                  <th class="p-1.5 border text-center">1BR</th>
+                  <th class="p-1.5 border text-center">2BR</th>
+                  <th class="p-1.5 border text-center font-bold">TOTAL</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyBldgB" class="divide-y divide-slate-100"></tbody>
+              <tfoot id="tfootBldgB" class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300"></tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- Combined Totals & Affordable Housing / 485x Summary -->
+        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
+          <h3 class="font-bold text-slate-900 uppercase border-b pb-2 mb-3 flex items-center justify-between">
+            <span>Totales Consolidados & Programa 485x / Asequibilidad</span>
+            <span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-mono font-bold" id="badgeTotalUnits">126 Unidades</span>
+          </h3>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div class="p-3 bg-slate-50 border rounded">
+              <span class="text-slate-500 block">ZFA Total Combinada:</span>
+              <span id="combZfaTotal" class="font-mono font-bold text-base text-blue-900">58,273.28 SF</span>
+            </div>
+            <div class="p-3 bg-slate-50 border rounded">
+              <span class="text-slate-500 block">Unidades Asequibles (485x):</span>
+              <span id="combAffordableUnits" class="font-mono font-bold text-base text-emerald-700">26 Unidades</span>
+            </div>
+            <div class="p-3 bg-slate-50 border rounded">
+              <span class="text-slate-500 block">Unidades a Mercado:</span>
+              <span id="combMarketUnits" class="font-mono font-bold text-base text-slate-800">100 Unidades</span>
+            </div>
+            <div class="p-3 bg-slate-50 border rounded">
+              <span class="text-slate-500 block">Bicicletas Requeridas:</span>
+              <span id="combBikeParking" class="font-mono font-bold text-base text-slate-800">63 Plazas</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TAB 3: ZR RESOLUTION CLAUSES -->
+      <div id="tabContentClauses" class="tab-content hidden flex flex-col gap-4">
+        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
+          <div class="flex items-center justify-between border-b pb-3 mb-4">
+            <div>
+              <h2 class="text-sm font-black text-slate-900 tracking-wide uppercase">
+                <i class="fa-solid fa-gavel text-blue-600 mr-1.5"></i> Matriz de Cláusulas Zoning Resolution (ZR)
+              </h2>
+              <p class="text-xs text-slate-500 mt-0.5">Artículos de NYC Zoning Resolution adaptados al distrito seleccionado</p>
+            </div>
+            <button onclick="addZrClauseRow()" class="bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs px-3 py-1.5 rounded font-semibold transition">
+              <i class="fa-solid fa-plus mr-1"></i> Añadir Artículo
+            </button>
+          </div>
+
+          <div class="overflow-x-auto custom-scroll">
+            <table class="w-full text-xs text-left border border-slate-200 rounded min-w-[700px]">
+              <thead class="bg-slate-100 text-slate-700 font-bold">
+                <tr>
+                  <th class="p-2 border w-28">SECCIÓN ZR</th>
+                  <th class="p-2 border w-48">TÍTULO / DESCRIPCIÓN</th>
+                  <th class="p-2 border">REGULACIÓN OFICIAL NYC ZR</th>
+                  <th class="p-2 border">CUMPLIMIENTO PROPUESTO</th>
+                  <th class="p-2 border text-center w-12 no-print">ACCIÓN</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyClauses" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: CSV PREVIEW -->
+      <div id="tabContentPreview" class="tab-content hidden flex flex-col gap-4">
+        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
+          <div class="flex items-center justify-between border-b pb-3 mb-3">
+            <h2 class="text-sm font-black text-slate-900 tracking-wide uppercase">
+              <i class="fa-solid fa-code text-slate-700 mr-1.5"></i> Salida CSV en tu formato exacto
+            </h2>
+            <button onclick="updateCsvPreview()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded font-semibold transition">
+              <i class="fa-solid fa-rotate mr-1"></i> Actualizar Vista
+            </button>
+          </div>
+          <textarea id="csvPreviewText" readonly class="w-full h-96 font-mono text-[11px] bg-slate-900 text-emerald-400 p-3 rounded-lg border border-slate-700 custom-scroll focus:outline-none"></textarea>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <footer class="bg-slate-900 text-slate-400 text-xs py-4 px-4 border-t border-slate-800 text-center mt-auto">
+    NYC ZoLa Clone & Zoning Resolution Generator — Desarrollado con datos de NYC Planning Labs (MapPLUTO, GeoSearch).
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
