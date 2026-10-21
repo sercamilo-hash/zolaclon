@@ -95,7 +95,7 @@ app.post('/api/export-csv', (req, res) => {
     const analysisData = req.body;
     const csvContent = generateZoningAnalysisCsv(analysisData);
     
-    const filename = `ZONING_ANALYSIS_${analysisData.propertyInfo?.block || 'BLOCK'}_${analysisData.propertyInfo?.lot || 'LOT'}.csv`;
+    const filename = `ZR_PLUS_ANALYSIS_${analysisData.propertyInfo?.block || 'BLOCK'}_${analysisData.propertyInfo?.lot || 'LOT'}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(csvContent);

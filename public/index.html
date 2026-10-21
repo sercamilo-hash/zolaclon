@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NYC ZOLA ZR - EXCEL SPREADSHEET DASHBOARD</title>
+  <title>Z.R.+ | NYC ZONING RESOLUTION PLUS</title>
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -27,6 +27,49 @@
       line-height: 1.3;
     }
 
+    /* Wordmark Logo Styling */
+    .brand-logo {
+      display: inline-flex;
+      align-items: center;
+      background-color: #000000;
+      color: #ffffff;
+      padding: 3px 8px;
+      border: 1px solid #000000;
+      gap: 8px;
+      user-select: none;
+    }
+
+    .brand-logo-mark {
+      font-family: Arial, sans-serif;
+      font-weight: 900;
+      font-size: 16px;
+      letter-spacing: -0.5px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: baseline;
+    }
+
+    .brand-logo-mark sup {
+      font-size: 11px;
+      font-weight: 900;
+      vertical-align: super;
+      margin-left: 1px;
+      color: #ffffff;
+    }
+
+    .brand-logo-sep {
+      color: #666666;
+      font-size: 13px;
+    }
+
+    .brand-logo-sub {
+      font-size: 9px;
+      font-weight: bold;
+      letter-spacing: 1.2px;
+      color: #d4d4d4;
+      text-transform: uppercase;
+    }
+
     /* Excel Ribbon / Formula Bar */
     .excel-header {
       background-color: #f3f3f3;
@@ -37,16 +80,6 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-    }
-
-    .excel-title {
-      font-size: 13px;
-      font-weight: bold;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      display: flex;
-      align-items: center;
-      gap: 6px;
     }
 
     .formula-bar {
@@ -121,7 +154,6 @@
       border-right: 2px solid #000000;
       background-color: #fafafa;
       display: flex;
-      flex-col;
       flex-direction: column;
     }
 
@@ -295,9 +327,11 @@
 
   <!-- Top Excel Ribbon / Formula Bar -->
   <div class="excel-header no-print">
-    <div class="excel-title">
-      <span>[ ZOLA-ZR ]</span>
-      <span>NYC ZONING & LAND USE SPREADSHEET</span>
+    <!-- Letters-only Logo -->
+    <div class="brand-logo">
+      <span class="brand-logo-mark">Z.R.<sup>+</sup></span>
+      <span class="brand-logo-sep">|</span>
+      <span class="brand-logo-sub">ZONING RESOLUTION PLUS</span>
     </div>
 
     <!-- Formula / Search Bar -->

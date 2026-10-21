@@ -1,7 +1,7 @@
 {
-  "name": "zolaclon",
+  "name": "zr-plus",
   "version": "1.0.0",
-  "description": "",
+  "description": "Z.R.+ | NYC Zoning Resolution Plus - Spreadsheet Analysis Platform",
   "main": "index.js",
   "scripts": {
     "start": "node server.js",

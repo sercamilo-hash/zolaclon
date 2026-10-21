@@ -632,7 +632,7 @@ function setupExcelExports() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ZONING_ANALYSIS_${currentLotData.propertyInfo.block || 'BLOCK'}_${currentLotData.propertyInfo.lot || 'LOT'}.csv`;
+    a.download = `ZR_PLUS_ANALYSIS_${currentLotData.propertyInfo.block || 'BLOCK'}_${currentLotData.propertyInfo.lot || 'LOT'}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     setStatus('CSV EXPORTED');
@@ -643,7 +643,7 @@ function setupExcelExports() {
     setStatus('GENERATING EXCEL (.XLSX)...');
     const csv = await fetchCsvString(currentLotData);
     const workbook = XLSX.read(csv, { type: 'string' });
-    const filename = `ZONING_ANALYSIS_${currentLotData.propertyInfo.block || 'BLOCK'}_${currentLotData.propertyInfo.lot || 'LOT'}.xlsx`;
+    const filename = `ZR_PLUS_ANALYSIS_${currentLotData.propertyInfo.block || 'BLOCK'}_${currentLotData.propertyInfo.lot || 'LOT'}.xlsx`;
     XLSX.writeFile(workbook, filename);
     setStatus('EXCEL EXPORTED');
   });

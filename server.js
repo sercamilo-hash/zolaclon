@@ -9,7 +9,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, () => {
   console.log(`=======================================================`);
-  console.log(` ZoLa Clone & Zoning Resolution Generator running on:`);
+  console.log(` Z.R.+ (ZONING RESOLUTION PLUS) running on:`);
   console.log(` http://localhost:${PORT}`);
   console.log(`=======================================================`);
 });
