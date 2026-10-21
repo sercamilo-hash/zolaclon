@@ -1,79 +1,145 @@
-// Client Application for NYC ZoLa Clone & Zoning Resolution Formatter
+// Client Logic for NYC ZoLa Clone - Monochrome Spreadsheet Edition
 
 let map;
-let marker;
+let baseLayers = {};
+let currentBaseLayer;
+let lotGeoJsonLayer = null;
+let zoningDistrictsLayer = null;
 let currentLotData = null;
 
-// Initialize Map & Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
-  initMap();
-  setupSearch();
-  setupExports();
-  // Load default demo (Queens R6 Lot)
-  loadDemoProperty('4161300035');
+  initExcelMap();
+  setupExcelSearch();
+  setupExcelExports();
+
+  // Load default demo: Queens R6 (Block 16130, Lot 35)
+  loadLotByBbl('4161300035');
+
+  // Trigger resize to guarantee map rendering
+  setTimeout(() => {
+    if (map) map.invalidateSize();
+  }, 250);
 });
 
-function initMap() {
-  map = L.map('map').setView([40.7128, -74.0060], 12);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap &copy; CARTO',
-    subdomains: 'abcd',
+// -------------------------------------------------------------
+// Initialize Map with ZoLa Layers & Monochrome Base
+// -------------------------------------------------------------
+function initExcelMap() {
+  const mapElement = document.getElementById('map');
+  if (!mapElement) return;
+
+  map = L.map('map', {
+    zoomControl: true,
+    attributionControl: false
+  }).setView([40.7128, -74.0060], 13);
+
+  // Base Layers
+  baseLayers.carto = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    subdomains: 'abcd'
+  });
+
+  baseLayers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19
-  }).addTo(map);
+  });
+
+  baseLayers.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+  });
+
+  // Default to monochrome Carto layer
+  currentBaseLayer = baseLayers.carto;
+  currentBaseLayer.addTo(map);
+
+  zoningDistrictsLayer = L.layerGroup().addTo(map);
+
+  // Invalidate size on window resize
+  window.addEventListener('resize', () => {
+    if (map) map.invalidateSize();
+  });
+}
+
+function changeBaseMap(layerName) {
+  if (!baseLayers[layerName]) return;
+  if (currentBaseLayer) map.removeLayer(currentBaseLayer);
+  currentBaseLayer = baseLayers[layerName];
+  currentBaseLayer.addTo(map);
+  if (lotGeoJsonLayer) lotGeoJsonLayer.bringToFront();
+}
+
+function toggleZoningLayer() {
+  const isChecked = document.getElementById('chkZoningLayer').checked;
+  if (isChecked) {
+    if (!map.hasLayer(zoningDistrictsLayer)) map.addLayer(zoningDistrictsLayer);
+  } else {
+    if (map.hasLayer(zoningDistrictsLayer)) map.removeLayer(zoningDistrictsLayer);
+  }
+}
+
+function toggleLotPolygon() {
+  const isChecked = document.getElementById('chkTaxLotLayer').checked;
+  if (!lotGeoJsonLayer) return;
+  if (isChecked) {
+    if (!map.hasLayer(lotGeoJsonLayer)) map.addLayer(lotGeoJsonLayer);
+  } else {
+    if (map.hasLayer(lotGeoJsonLayer)) map.removeLayer(lotGeoJsonLayer);
+  }
 }
 
 // -------------------------------------------------------------
-// Search & Autocomplete
+// Search Bar with Formula Bar & Dropdown
 // -------------------------------------------------------------
-function setupSearch() {
-  const searchInput = document.getElementById('searchInput');
-  const searchResults = document.getElementById('searchResults');
-  const clearSearch = document.getElementById('clearSearch');
+function setupExcelSearch() {
+  const input = document.getElementById('searchInput');
+  const dropdown = document.getElementById('searchDropdown');
+  const btnSubmit = document.getElementById('btnSearchSubmit');
   let debounceTimer;
 
-  searchInput.addEventListener('input', (e) => {
-    const val = e.target.value.trim();
-    if (val.length > 0) {
-      clearSearch.classList.remove('hidden');
-    } else {
-      clearSearch.classList.add('hidden');
-      searchResults.classList.add('hidden');
+  input.addEventListener('input', (e) => {
+    const q = e.target.value.trim();
+    if (q.length < 2) {
+      dropdown.style.display = 'none';
       return;
     }
 
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      fetchSearchResults(val);
+      fetchSearch(q);
     }, 280);
   });
 
-  clearSearch.addEventListener('click', () => {
-    searchInput.value = '';
-    clearSearch.classList.add('hidden');
-    searchResults.classList.add('hidden');
+  btnSubmit.addEventListener('click', () => {
+    const q = input.value.trim();
+    if (q) fetchSearch(q);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const q = input.value.trim();
+      if (q) fetchSearch(q);
+    }
   });
 
   document.addEventListener('click', (e) => {
-    if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-      searchResults.classList.add('hidden');
+    if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = 'none';
     }
   });
 }
 
-async function fetchSearchResults(query) {
-  const searchResults = document.getElementById('searchResults');
-  // Check if user entered a 10-digit BBL directly
+async function fetchSearch(query) {
+  const dropdown = document.getElementById('searchDropdown');
+  setStatus(`SEARCHING: ${query}...`);
+
+  // Direct 10-digit BBL
   if (/^\d{10}$/.test(query)) {
-    searchResults.innerHTML = `
-      <div onclick="selectBbl('${query}')" class="p-3 hover:bg-blue-50 cursor-pointer border-b text-xs flex items-center justify-between">
-        <div>
-          <span class="font-bold text-blue-600">BBL Directo: ${query}</span>
-          <span class="text-slate-500 block">Consultar MapPLUTO para este BBL</span>
-        </div>
-        <i class="fa-solid fa-arrow-right text-slate-400"></i>
+    dropdown.innerHTML = `
+      <div class="search-item" onclick="selectBbl('${query}')">
+        <strong>BBL DIRECT QUERY: ${query}</strong><br/>
+        <span style="font-size: 10px; color: #666;">QUERY MAPPLUTO FOR THIS PROPERTY</span>
       </div>
     `;
-    searchResults.classList.remove('hidden');
+    dropdown.style.display = 'block';
     return;
   }
 
@@ -82,34 +148,33 @@ async function fetchSearchResults(query) {
     const data = await res.json();
 
     if (!data.features || data.features.length === 0) {
-      searchResults.innerHTML = `<div class="p-3 text-xs text-slate-500">No se encontraron resultados en NYC.</div>`;
-      searchResults.classList.remove('hidden');
+      dropdown.innerHTML = `<div class="search-item" style="color: #888;">NO RESULTS FOUND IN NYC</div>`;
+      dropdown.style.display = 'block';
+      setStatus('READY');
       return;
     }
 
-    searchResults.innerHTML = data.features.slice(0, 6).map(f => {
+    dropdown.innerHTML = data.features.slice(0, 7).map(f => {
       const p = f.properties || {};
       const bbl = p.addendum?.pad?.bbl || p.pad_bbl || '';
       return `
-        <div onclick="selectFeature('${bbl}', '${encodeURIComponent(p.label || p.name || '')}', ${f.geometry.coordinates[1]}, ${f.geometry.coordinates[0]})" 
-             class="p-2.5 hover:bg-blue-50 cursor-pointer border-b border-slate-100 text-xs flex justify-between items-center transition">
-          <div>
-            <div class="font-bold text-slate-800">${p.label || p.name}</div>
-            <div class="text-[11px] text-slate-500">${p.borough || ''} ${bbl ? '• BBL: ' + bbl : ''}</div>
-          </div>
-          <span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">Select</span>
+        <div class="search-item" onclick="selectResult('${bbl}', '${encodeURIComponent(p.label || p.name || '')}', ${f.geometry.coordinates[1]}, ${f.geometry.coordinates[0]})">
+          <strong>${(p.label || p.name || '').toUpperCase()}</strong><br/>
+          <span style="font-size: 10px; color: #555;">${p.borough ? p.borough.toUpperCase() : ''} ${bbl ? '• BBL: ' + bbl : ''}</span>
         </div>
       `;
     }).join('');
-    searchResults.classList.remove('hidden');
+    dropdown.style.display = 'block';
+    setStatus('READY');
   } catch (err) {
-    console.error('Error fetching search results:', err);
+    console.error('Search error:', err);
+    setStatus('SEARCH ERROR');
   }
 }
 
-function selectFeature(bbl, labelEncoded, lat, lng) {
-  document.getElementById('searchResults').classList.add('hidden');
-  const label = decodeURIComponent(labelEncoded);
+function selectResult(bbl, encodedLabel, lat, lng) {
+  document.getElementById('searchDropdown').style.display = 'none';
+  const label = decodeURIComponent(encodedLabel);
   document.getElementById('searchInput').value = label;
   if (bbl) {
     loadLotByBbl(bbl, lat, lng);
@@ -117,66 +182,114 @@ function selectFeature(bbl, labelEncoded, lat, lng) {
 }
 
 function selectBbl(bbl) {
-  document.getElementById('searchResults').classList.add('hidden');
+  document.getElementById('searchDropdown').style.display = 'none';
   document.getElementById('searchInput').value = bbl;
   loadLotByBbl(bbl);
 }
 
 // -------------------------------------------------------------
-// Load Lot from API
+// Load Lot & Fetch Surrounding Zoning Districts (ZoLa Layers)
 // -------------------------------------------------------------
 async function loadLotByBbl(bbl, fallbackLat, fallbackLng) {
-  document.getElementById('mapStatusBadge').innerText = 'Cargando...';
+  setStatus(`LOADING BBL: ${bbl}...`);
   try {
     const res = await fetch(`/api/lot?bbl=${bbl}`);
     if (!res.ok) {
-      alert(`No se encontró el lote BBL ${bbl} en MapPLUTO.`);
-      document.getElementById('mapStatusBadge').innerText = 'Error';
+      alert(`BBL ${bbl} not found in MapPLUTO.`);
+      setStatus('LOT NOT FOUND');
       return;
     }
 
     const data = await res.json();
     currentLotData = data;
-    renderAll(data);
+    renderSpreadsheetData(data);
 
-    // Center map
-    let lat = parseFloat(data.rawPluto?.latitude) || fallbackLat;
-    let lng = parseFloat(data.rawPluto?.longitude) || fallbackLng;
-    if (lat && lng) {
+    // Render Lot Polygon on Map
+    const pluto = data.rawPluto || {};
+    let lat = parseFloat(pluto.latitude) || fallbackLat;
+    let lng = parseFloat(pluto.longitude) || fallbackLng;
+
+    if (pluto.geometry_geojson) {
+      try {
+        const geojson = JSON.parse(pluto.geometry_geojson);
+        if (lotGeoJsonLayer) map.removeLayer(lotGeoJsonLayer);
+
+        lotGeoJsonLayer = L.geoJSON(geojson, {
+          style: {
+            color: '#000000',
+            weight: 3,
+            opacity: 1,
+            fillColor: '#000000',
+            fillOpacity: 0.18
+          }
+        }).addTo(map);
+
+        lotGeoJsonLayer.bindPopup(`
+          <div style="font-size: 11px; font-family: Arial;">
+            <strong>${data.propertyInfo.address}</strong><br/>
+            <strong>ZONE:</strong> ${data.propertyInfo.zoningDistrict}<br/>
+            <strong>LOT AREA:</strong> ${data.propertyInfo.totalLotArea} SF<br/>
+            <strong>BBL:</strong> ${data.propertyInfo.bbl}
+          </div>
+        `);
+
+        map.fitBounds(lotGeoJsonLayer.getBounds(), { padding: [25, 25], maxZoom: 18 });
+        lotGeoJsonLayer.openPopup();
+      } catch (e) {
+        console.error('Failed to parse lot GeoJSON:', e);
+      }
+    } else if (lat && lng) {
       map.setView([lat, lng], 17);
-      if (marker) map.removeLayer(marker);
-      marker = L.marker([lat, lng]).addTo(map)
-        .bindPopup(`<b>${data.propertyInfo.address}</b><br>Zoning: ${data.propertyInfo.zoningDistrict}<br>Lot Area: ${data.propertyInfo.totalLotArea} SF`)
-        .openPopup();
     }
-    document.getElementById('mapStatusBadge').innerText = 'Activo';
+
+    // Fetch surrounding zoning districts layer (ZoLa layer)
+    if (lat && lng) {
+      loadSurroundingZoning(lat, lng);
+    }
+
+    setStatus(`READY • BBL: ${data.propertyInfo.bbl} (${data.propertyInfo.zoningDistrict})`);
+    setTimeout(() => { if (map) map.invalidateSize(); }, 150);
+
   } catch (err) {
     console.error('Failed to load lot:', err);
-    document.getElementById('mapStatusBadge').innerText = 'Error';
+    setStatus('ERROR LOADING LOT');
   }
 }
 
-function loadDemoProperty(bbl) {
-  loadLotByBbl(bbl);
-}
+async function loadSurroundingZoning(lat, lng) {
+  try {
+    const res = await fetch(`/api/zoning-surrounding?lat=${lat}&lng=${lng}`);
+    const rows = await res.json();
+    zoningDistrictsLayer.clearLayers();
 
-async function loadDemoAddress(addr) {
-  document.getElementById('searchInput').value = addr;
-  const res = await fetch(`/api/search?q=${encodeURIComponent(addr)}`);
-  const data = await res.json();
-  if (data.features && data.features.length > 0) {
-    const f = data.features[0];
-    const bbl = f.properties?.addendum?.pad?.bbl || f.properties?.pad_bbl;
-    if (bbl) {
-      loadLotByBbl(bbl, f.geometry.coordinates[1], f.geometry.coordinates[0]);
-    }
+    rows.forEach(r => {
+      if (!r.geojson) return;
+      try {
+        const geom = JSON.parse(r.geojson);
+        const poly = L.geoJSON(geom, {
+          style: {
+            color: '#444444',
+            weight: 1.5,
+            dashArray: '4, 4',
+            fillColor: '#666666',
+            fillOpacity: 0.05
+          }
+        });
+        poly.bindTooltip(`<b>${r.zonedist}</b>`, { permanent: false, direction: 'center', className: 'no-radius' });
+        zoningDistrictsLayer.addLayer(poly);
+      } catch (e) {}
+    });
+
+    if (lotGeoJsonLayer) lotGeoJsonLayer.bringToFront();
+  } catch (e) {
+    console.error('Failed to load zoning layer:', e);
   }
 }
 
 // -------------------------------------------------------------
-// Render Data in UI
+// Render Data in Monochrome Spreadsheet
 // -------------------------------------------------------------
-function renderAll(data) {
+function renderSpreadsheetData(data) {
   const p = data.propertyInfo;
   const res = data.residentialFloorArea;
   const comm = data.commercialFloorArea;
@@ -184,16 +297,18 @@ function renderAll(data) {
   const d = data.density;
   const pk = data.parking;
 
-  // Left summary card
-  document.getElementById('activeBblBadge').innerText = `BBL: ${p.bbl || '-'}`;
-  document.getElementById('summaryAddress').innerText = p.address || 'N/A';
-  document.getElementById('summaryBoroughBlock').innerText = `${p.borough} • Block ${p.block} • Lot ${p.lot}`;
-  document.getElementById('summaryZoning').innerText = p.zoningDistrict;
-  document.getElementById('summaryLotArea').innerText = `${p.totalLotArea.toLocaleString()} SF`;
-  document.getElementById('summarySpecialDist').innerText = p.specialZoningDistrict;
-  document.getElementById('summaryTransit').innerText = p.transitZone.includes('INNER') ? 'Inner Transit Zone' : 'Standard Zone';
+  // Left card labels
+  document.getElementById('lblBbl').innerText = p.bbl || '-';
+  document.getElementById('lblAddress').innerText = p.address || '-';
+  document.getElementById('lblBoroughBlockLot').innerText = `${p.borough} / ${p.block} / ${p.lot}`;
+  document.getElementById('lblZoning').innerText = p.zoningDistrict;
+  document.getElementById('lblSpecialDist').innerText = p.specialZoningDistrict;
+  document.getElementById('lblLotArea').innerText = `${p.totalLotArea.toLocaleString()} SF`;
+  document.getElementById('lblFloodZone').innerText = p.floodZone;
+  document.getElementById('lblTransitZone').innerText = p.transitZone.includes('INNER') ? 'INNER TRANSIT ZONE' : 'STANDARD';
+  document.getElementById('lblOer').innerText = p.oerHazard;
 
-  // Tab 1: Property Info
+  // Sheet 1: Property info inputs
   document.getElementById('propBorough').value = p.borough;
   document.getElementById('propBlock').value = p.block;
   document.getElementById('propLot').value = p.lot;
@@ -207,16 +322,11 @@ function renderAll(data) {
   document.getElementById('propFloodZone').value = p.floodZone;
   document.getElementById('propEligibleSite').value = p.eligibleSite;
   document.getElementById('propOerHazard').value = p.oerHazard;
-  document.getElementById('propCommunityBoard').value = p.communityBoard;
-  document.getElementById('propZoningMap').value = p.zoningMap;
 
-  // Tab 1: Floor Area
+  // Floor area inputs
   document.getElementById('resFarStd').value = res.standardFar;
   document.getElementById('resFarUap').value = res.uapFar;
-  document.getElementById('resPropStd').value = res.standardProposed || 0;
-  document.getElementById('resPropUap').value = res.uapProposed || 0;
   document.getElementById('commFarInput').value = comm.commFar;
-  document.getElementById('commPropInput').value = comm.proposed || 0;
 
   // Height & Setback
   document.getElementById('hMinBase').innerText = h.minBase;
@@ -225,20 +335,21 @@ function renderAll(data) {
 
   // Density & Parking
   document.getElementById('densityMaxUnits').innerText = d.maxAllowedDensity;
+  document.getElementById('propDensityUnits').value = d.maxAllowedDensity;
   document.getElementById('pkTransitZone').innerText = pk.transitZone;
-  document.getElementById('pkBikeSpaces').innerText = pk.bikeParking;
+  document.getElementById('pkBikeSpaces').innerText = `${pk.bikeParking} SPACES`;
 
   recalculateZoning();
 
-  // Tab 2: Buildings
-  renderBuildingTable('A', data.buildingA);
-  renderBuildingTable('B', data.buildingB);
+  // Sheet 2: Building Schedules
+  renderExcelBuildingTable('A', data.buildingA);
+  renderExcelBuildingTable('B', data.buildingB);
   updateCombinedTotals();
 
-  // Tab 3: Clauses
-  renderClauses(data.zrClauses);
+  // Sheet 3: ZR Clauses
+  renderClausesTable(data.zrClauses);
 
-  // Tab 4: CSV
+  // Sheet 4: Raw CSV
   updateCsvPreview();
 }
 
@@ -246,20 +357,17 @@ function recalculateZoning() {
   const lotArea = parseFloat(document.getElementById('propLotArea').value) || 0;
   const resFarStd = parseFloat(document.getElementById('resFarStd').value) || 0;
   const resFarUap = parseFloat(document.getElementById('resFarUap').value) || 0;
-  const resPropStd = parseFloat(document.getElementById('resPropStd').value) || 0;
-  const resPropUap = parseFloat(document.getElementById('resPropUap').value) || 0;
   const commFar = parseFloat(document.getElementById('commFarInput').value) || 0;
-  const commProp = parseFloat(document.getElementById('commPropInput').value) || 0;
 
   const zfaStd = Number((lotArea * resFarStd).toFixed(3));
   const zfaUap = Number((lotArea * resFarUap).toFixed(3));
   const zfaComm = Number((lotArea * commFar).toFixed(3));
 
   document.getElementById('resZfaStd').innerText = zfaStd.toLocaleString();
-  document.getElementById('resRemStd').innerText = (zfaStd - resPropStd).toLocaleString();
+  document.getElementById('resRemStd').innerText = zfaStd.toLocaleString();
 
   document.getElementById('resZfaUap').innerText = zfaUap.toLocaleString();
-  document.getElementById('resRemUap').innerText = (zfaUap - resPropUap).toLocaleString();
+  document.getElementById('resRemUap').innerText = zfaUap.toLocaleString();
 
   const allowedAmenities = (zfaUap * 0.05).toFixed(3);
   const reqAmenities = (zfaUap * 0.03).toFixed(3);
@@ -267,14 +375,13 @@ function recalculateZoning() {
   document.getElementById('resRequiredAmenities').innerText = `${Number(reqAmenities).toLocaleString()} SF`;
 
   document.getElementById('commZfaMax').innerText = zfaComm.toLocaleString();
-  document.getElementById('commRem').innerText = (zfaComm - commProp).toLocaleString();
+  document.getElementById('commRem').innerText = zfaComm.toLocaleString();
 
-  // Update Density (factor 680)
   const maxUnits = zfaUap > 0 ? Math.floor(zfaUap / 680) : 0;
   document.getElementById('densityMaxUnits').innerText = maxUnits;
-  document.getElementById('pkBikeSpaces').innerText = Math.ceil(maxUnits / 2);
+  document.getElementById('propDensityUnits').value = maxUnits;
+  document.getElementById('pkBikeSpaces').innerText = `${Math.ceil(maxUnits / 2)} SPACES`;
 
-  // Sync to currentLotData
   if (currentLotData) {
     currentLotData.propertyInfo.totalLotArea = lotArea;
     currentLotData.residentialFloorArea.standardFar = resFarStd;
@@ -288,33 +395,32 @@ function recalculateZoning() {
 }
 
 // -------------------------------------------------------------
-// Building Tables Logic (Building A & Building B)
+// Building Schedules Logic
 // -------------------------------------------------------------
-function renderBuildingTable(bldgLetter, bldgData) {
+function renderExcelBuildingTable(bldgLetter, bldgData) {
   const tbody = document.getElementById(`tbodyBldg${bldgLetter}`);
   tbody.innerHTML = '';
 
   (bldgData.levels || []).forEach((lvl, idx) => {
     const tr = document.createElement('tr');
-    tr.className = 'hover:bg-slate-50 transition border-b border-slate-100 text-[11px]';
     tr.innerHTML = `
-      <td class="p-1 border"><input type="text" value="${lvl.level}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'level', this.value)" class="w-14 font-bold border-0 bg-transparent" /></td>
-      <td class="p-1 border text-right"><input type="number" step="0.01" value="${lvl.resGfa || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'resGfa', this.value)" class="w-16 text-right border rounded p-0.5" /></td>
-      <td class="p-1 border text-right"><input type="number" step="0.01" value="${lvl.commGfa || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'commGfa', this.value)" class="w-16 text-right border rounded p-0.5" /></td>
-      <td class="p-1 border text-right"><input type="number" step="0.01" value="${lvl.chaseWalls || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'chaseWalls', this.value)" class="w-12 text-right border rounded p-0.5" /></td>
-      <td class="p-1 border text-right"><input type="number" step="0.01" value="${lvl.mechanical || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'mechanical', this.value)" class="w-12 text-right border rounded p-0.5" /></td>
-      <td class="p-1 border text-right"><input type="number" step="0.01" value="${lvl.parking || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'parking', this.value)" class="w-12 text-right border rounded p-0.5" /></td>
-      <td class="p-1 border text-right"><input type="number" step="0.01" value="${lvl.bikeParking || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'bikeParking', this.value)" class="w-12 text-right border rounded p-0.5" /></td>
-      <td class="p-1 border text-right"><input type="number" step="0.01" value="${lvl.amenities || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'amenities', this.value)" class="w-12 text-right border rounded p-0.5" /></td>
-      <td class="p-1 border text-right"><input type="number" step="0.01" value="${lvl.corridor || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'corridor', this.value)" class="w-14 text-right border rounded p-0.5" /></td>
-      <td class="p-1 border text-right"><input type="number" step="0.01" value="${lvl.refuse || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'refuse', this.value)" class="w-12 text-right border rounded p-0.5" /></td>
-      <td class="p-1 border text-right font-mono font-semibold" id="net_${bldgLetter}_${idx}">${Number(lvl.netFloorArea || 0).toFixed(2)}</td>
-      <td class="p-1 border text-right font-mono text-slate-500" id="energy_${bldgLetter}_${idx}">${Number(lvl.energyDeduction || 0).toFixed(2)}</td>
-      <td class="p-1 border text-right font-mono font-bold text-blue-900 bg-blue-50" id="zfa_${bldgLetter}_${idx}">${Number(lvl.zfa || 0).toFixed(2)}</td>
-      <td class="p-1 border text-center"><input type="number" value="${lvl.studio || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'studio', this.value)" class="w-10 text-center border rounded p-0.5" /></td>
-      <td class="p-1 border text-center"><input type="number" value="${lvl.oneBr || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'oneBr', this.value)" class="w-10 text-center border rounded p-0.5" /></td>
-      <td class="p-1 border text-center"><input type="number" value="${lvl.twoBr || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'twoBr', this.value)" class="w-10 text-center border rounded p-0.5" /></td>
-      <td class="p-1 border text-center font-bold font-mono" id="units_${bldgLetter}_${idx}">${lvl.totalUnits || 0}</td>
+      <td class="bold"><input type="text" value="${lvl.level}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'level', this.value)" style="width: 55px; font-weight: bold;" /></td>
+      <td><input type="number" step="0.01" value="${lvl.resGfa || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'resGfa', this.value)" class="numeric" style="width: 70px;" /></td>
+      <td><input type="number" step="0.01" value="${lvl.commGfa || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'commGfa', this.value)" class="numeric" style="width: 70px;" /></td>
+      <td><input type="number" step="0.01" value="${lvl.chaseWalls || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'chaseWalls', this.value)" class="numeric" style="width: 50px;" /></td>
+      <td><input type="number" step="0.01" value="${lvl.mechanical || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'mechanical', this.value)" class="numeric" style="width: 50px;" /></td>
+      <td><input type="number" step="0.01" value="${lvl.parking || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'parking', this.value)" class="numeric" style="width: 50px;" /></td>
+      <td><input type="number" step="0.01" value="${lvl.bikeParking || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'bikeParking', this.value)" class="numeric" style="width: 50px;" /></td>
+      <td><input type="number" step="0.01" value="${lvl.amenities || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'amenities', this.value)" class="numeric" style="width: 50px;" /></td>
+      <td><input type="number" step="0.01" value="${lvl.corridor || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'corridor', this.value)" class="numeric" style="width: 55px;" /></td>
+      <td><input type="number" step="0.01" value="${lvl.refuse || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'refuse', this.value)" class="numeric" style="width: 50px;" /></td>
+      <td class="numeric bold" id="net_${bldgLetter}_${idx}">${Number(lvl.netFloorArea || 0).toFixed(2)}</td>
+      <td class="numeric" id="energy_${bldgLetter}_${idx}">${Number(lvl.energyDeduction || 0).toFixed(2)}</td>
+      <td class="numeric bold" id="zfa_${bldgLetter}_${idx}" style="background: #f0f0f0;">${Number(lvl.zfa || 0).toFixed(2)}</td>
+      <td><input type="number" value="${lvl.studio || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'studio', this.value)" class="numeric" style="width: 40px;" /></td>
+      <td><input type="number" value="${lvl.oneBr || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'oneBr', this.value)" class="numeric" style="width: 40px;" /></td>
+      <td><input type="number" value="${lvl.twoBr || 0}" onchange="updateFloorCell('${bldgLetter}', ${idx}, 'twoBr', this.value)" class="numeric" style="width: 40px;" /></td>
+      <td class="numeric bold" id="units_${bldgLetter}_${idx}">${lvl.totalUnits || 0}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -327,11 +433,9 @@ function updateFloorCell(bldgLetter, idx, field, value) {
   const lvl = currentLotData[bldgKey].levels[idx];
   lvl[field] = field === 'level' ? value : (parseFloat(value) || 0);
 
-  // Auto calculate Net FA, Energy Deduction, ZFA, Units
   const totalGfa = (lvl.resGfa || 0) + (lvl.commGfa || 0);
   const totalDeductions = (lvl.chaseWalls || 0) + (lvl.mechanical || 0) + (lvl.parking || 0) + (lvl.bikeParking || 0) + (lvl.amenities || 0) + (lvl.corridor || 0) + (lvl.refuse || 0);
   
-  // If Cellar, Net FA is typically 0 for ZFA purposes unless specified
   if (lvl.level.toUpperCase().includes('CELLAR')) {
     lvl.netFloorArea = 0;
     lvl.energyDeduction = 0;
@@ -344,7 +448,6 @@ function updateFloorCell(bldgLetter, idx, field, value) {
 
   lvl.totalUnits = (lvl.studio || 0) + (lvl.oneBr || 0) + (lvl.twoBr || 0);
 
-  // Update UI row elements
   document.getElementById(`net_${bldgLetter}_${idx}`).innerText = lvl.netFloorArea.toFixed(2);
   document.getElementById(`energy_${bldgLetter}_${idx}`).innerText = lvl.energyDeduction.toFixed(2);
   document.getElementById(`zfa_${bldgLetter}_${idx}`).innerText = lvl.zfa.toFixed(2);
@@ -387,23 +490,23 @@ function recalculateBuildingTotals(bldgLetter) {
   const tfoot = document.getElementById(`tfootBldg${bldgLetter}`);
   tfoot.innerHTML = `
     <tr>
-      <td class="p-1.5 border">TOTALS</td>
-      <td class="p-1.5 border text-right font-mono">${totals.resGfa.toFixed(2)}</td>
-      <td class="p-1.5 border text-right font-mono">${totals.commGfa.toFixed(2)}</td>
-      <td class="p-1.5 border text-right font-mono">${totals.chaseWalls.toFixed(2)}</td>
-      <td class="p-1.5 border text-right font-mono">${totals.mechanical.toFixed(2)}</td>
-      <td class="p-1.5 border text-right font-mono">${totals.parking.toFixed(2)}</td>
-      <td class="p-1.5 border text-right font-mono">${totals.bikeParking.toFixed(2)}</td>
-      <td class="p-1.5 border text-right font-mono">${totals.amenities.toFixed(2)}</td>
-      <td class="p-1.5 border text-right font-mono">${totals.corridor.toFixed(2)}</td>
-      <td class="p-1.5 border text-right font-mono">${totals.refuse.toFixed(2)}</td>
-      <td class="p-1.5 border text-right font-mono">${totals.netFloorArea.toFixed(2)}</td>
-      <td class="p-1.5 border text-right font-mono">${totals.energyDeduction.toFixed(2)}</td>
-      <td class="p-1.5 border text-right font-mono text-blue-900 bg-blue-100">${totals.zfa.toFixed(2)}</td>
-      <td class="p-1.5 border text-center font-mono">${totals.studio}</td>
-      <td class="p-1.5 border text-center font-mono">${totals.oneBr}</td>
-      <td class="p-1.5 border text-center font-mono">${totals.twoBr}</td>
-      <td class="p-1.5 border text-center font-mono">${totals.totalUnits}</td>
+      <td class="bold">TOTALS</td>
+      <td class="numeric bold">${totals.resGfa.toFixed(2)}</td>
+      <td class="numeric bold">${totals.commGfa.toFixed(2)}</td>
+      <td class="numeric bold">${totals.chaseWalls.toFixed(2)}</td>
+      <td class="numeric bold">${totals.mechanical.toFixed(2)}</td>
+      <td class="numeric bold">${totals.parking.toFixed(2)}</td>
+      <td class="numeric bold">${totals.bikeParking.toFixed(2)}</td>
+      <td class="numeric bold">${totals.amenities.toFixed(2)}</td>
+      <td class="numeric bold">${totals.corridor.toFixed(2)}</td>
+      <td class="numeric bold">${totals.refuse.toFixed(2)}</td>
+      <td class="numeric bold">${totals.netFloorArea.toFixed(2)}</td>
+      <td class="numeric bold">${totals.energyDeduction.toFixed(2)}</td>
+      <td class="numeric bold" style="background: #000; color: #fff;">${totals.zfa.toFixed(2)}</td>
+      <td class="numeric bold">${totals.studio}</td>
+      <td class="numeric bold">${totals.oneBr}</td>
+      <td class="numeric bold">${totals.twoBr}</td>
+      <td class="numeric bold">${totals.totalUnits}</td>
     </tr>
   `;
 }
@@ -412,10 +515,10 @@ function addFloorRow(bldgLetter) {
   const bldgKey = `building${bldgLetter}`;
   const count = currentLotData[bldgKey].levels.length;
   currentLotData[bldgKey].levels.push({
-    level: `${count}th`, resGfa: 4000, commGfa: 0, chaseWalls: 100, mechanical: 0, parking: 0, bikeParking: 0, amenities: 0,
+    level: `${count}TH`, resGfa: 4000, commGfa: 0, chaseWalls: 100, mechanical: 0, parking: 0, bikeParking: 0, amenities: 0,
     corridor: 300, refuse: 20, netFloorArea: 3580, energyDeduction: 179, zfa: 3401, studio: 1, oneBr: 2, twoBr: 4, totalUnits: 7
   });
-  renderBuildingTable(bldgLetter, currentLotData[bldgKey]);
+  renderExcelBuildingTable(bldgLetter, currentLotData[bldgKey]);
   updateCombinedTotals();
 }
 
@@ -430,93 +533,88 @@ function updateCombinedTotals() {
   const bikeSpaces = Math.ceil(totalUnits / 2);
 
   document.getElementById('combZfaTotal').innerText = `${totalZfa.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} SF`;
-  document.getElementById('badgeTotalUnits').innerText = `${totalUnits} Unidades Totales`;
-  document.getElementById('combAffordableUnits').innerText = `${affordable485x} Unidades`;
-  document.getElementById('combMarketUnits').innerText = `${marketUnits} Unidades`;
-  document.getElementById('combBikeParking').innerText = `${bikeSpaces} Plazas`;
+  document.getElementById('badgeTotalUnits').innerText = `${totalUnits} UNITS`;
+  document.getElementById('combAffordableUnits').innerText = `${affordable485x} UNITS`;
+  document.getElementById('combMarketUnits').innerText = `${marketUnits} UNITS`;
+  document.getElementById('combBikeParking').innerText = `${bikeSpaces} SPACES`;
 }
 
 // -------------------------------------------------------------
-// ZR Clauses Logic
+// ZR Clauses Table
 // -------------------------------------------------------------
-function renderClauses(clauses) {
+function renderClausesTable(clauses) {
   const tbody = document.getElementById('tbodyClauses');
   tbody.innerHTML = '';
 
   (clauses || []).forEach((c, idx) => {
     const tr = document.createElement('tr');
-    tr.className = 'hover:bg-slate-50 transition border-b border-slate-100 text-xs';
     tr.innerHTML = `
-      <td class="p-2 border font-bold text-blue-700">${c.section}</td>
-      <td class="p-2 border font-semibold text-slate-800">${c.title}</td>
-      <td class="p-2 border text-slate-600 font-mono text-[11px]">${c.ruleText}</td>
-      <td class="p-2 border"><textarea onchange="updateClauseCompliance(${idx}, this.value)" class="w-full text-xs p-1 border rounded bg-slate-50 text-slate-800 font-medium" rows="2">${c.complianceText}</textarea></td>
-      <td class="p-2 border text-center no-print">
-        <button onclick="removeClause(${idx})" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash"></i></button>
+      <td class="bold">${c.section}</td>
+      <td class="bold">${c.title}</td>
+      <td style="font-size: 10px; color: #333;">${c.ruleText}</td>
+      <td><input type="text" value="${c.complianceText}" onchange="currentLotData.zrClauses[${idx}].complianceText = this.value" class="bold" /></td>
+      <td style="text-align: center;" class="no-print">
+        <button onclick="removeClause(${idx})" class="excel-btn" style="padding: 1px 4px; font-size: 10px;">DEL</button>
       </td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-function updateClauseCompliance(idx, val) {
-  currentLotData.zrClauses[idx].complianceText = val;
-}
-
 function removeClause(idx) {
   currentLotData.zrClauses.splice(idx, 1);
-  renderClauses(currentLotData.zrClauses);
+  renderClausesTable(currentLotData.zrClauses);
 }
 
 function addZrClauseRow() {
-  const sec = prompt('Número de sección ZR (ej: ZR 23-432):', 'ZR ');
+  const sec = prompt('ZR Section (e.g., ZR 23-432):', 'ZR ');
   if (!sec) return;
-  const title = prompt('Título / Descripción:', 'REGULACIÓN DE ALTURA');
+  const title = prompt('Title / Description:', 'HEIGHT & SETBACK');
   currentLotData.zrClauses.push({
     section: sec,
     title: title || '',
-    ruleText: 'REGULACIÓN APLICABLE NYC ZR',
-    complianceText: 'CUMPLE CON LA REGULACIÓN'
+    ruleText: 'APPLICABLE NYC ZR REGULATION',
+    complianceText: 'COMPLIES'
   });
-  renderClauses(currentLotData.zrClauses);
+  renderClausesTable(currentLotData.zrClauses);
 }
 
 // -------------------------------------------------------------
-// Navigation Tabs
+// Sheet Switcher (Tabs)
 // -------------------------------------------------------------
-function switchTab(tabId) {
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.remove('bg-blue-600', 'text-white');
-    b.classList.add('text-slate-600', 'hover:bg-slate-100');
-  });
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+function switchSheet(sheetId) {
+  document.querySelectorAll('.sheet-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('sheetZoning').style.display = 'none';
+  document.getElementById('sheetBuilding').style.display = 'none';
+  document.getElementById('sheetClauses').style.display = 'none';
+  document.getElementById('sheetPreview').style.display = 'none';
 
-  if (tabId === 'zoning') {
-    document.getElementById('tabBtn1').classList.add('bg-blue-600', 'text-white');
-    document.getElementById('tabContentZoning').classList.remove('hidden');
-  } else if (tabId === 'building') {
-    document.getElementById('tabBtn2').classList.add('bg-blue-600', 'text-white');
-    document.getElementById('tabContentBuilding').classList.remove('hidden');
-  } else if (tabId === 'clauses') {
-    document.getElementById('tabBtn3').classList.add('bg-blue-600', 'text-white');
-    document.getElementById('tabContentClauses').classList.remove('hidden');
-  } else if (tabId === 'preview') {
-    document.getElementById('tabBtn4').classList.add('bg-blue-600', 'text-white');
-    document.getElementById('tabContentPreview').classList.remove('hidden');
+  if (sheetId === 'zoning') {
+    document.getElementById('tab1').classList.add('active');
+    document.getElementById('sheetZoning').style.display = 'block';
+  } else if (sheetId === 'building') {
+    document.getElementById('tab2').classList.add('active');
+    document.getElementById('sheetBuilding').style.display = 'block';
+  } else if (sheetId === 'clauses') {
+    document.getElementById('tab3').classList.add('active');
+    document.getElementById('sheetClauses').style.display = 'block';
+  } else if (sheetId === 'preview') {
+    document.getElementById('tab4').classList.add('active');
+    document.getElementById('sheetPreview').style.display = 'block';
     updateCsvPreview();
   }
 }
 
 // -------------------------------------------------------------
-// CSV & Excel Exporter
+// Exports: CSV & Excel (.xlsx)
 // -------------------------------------------------------------
 async function updateCsvPreview() {
   if (!currentLotData) return;
-  const csvStr = await generateCsvString(currentLotData);
-  document.getElementById('csvPreviewText').value = csvStr;
+  const csv = await fetchCsvString(currentLotData);
+  document.getElementById('csvPreviewText').value = csv;
 }
 
-async function generateCsvString(data) {
+async function fetchCsvString(data) {
   const res = await fetch('/api/export-csv', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -525,26 +623,33 @@ async function generateCsvString(data) {
   return await res.text();
 }
 
-function setupExports() {
-  // 1. Export CSV
+function setupExcelExports() {
   document.getElementById('btnExportCsv').addEventListener('click', async () => {
     if (!currentLotData) return;
-    const csvContent = await generateCsvString(currentLotData);
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    setStatus('GENERATING CSV...');
+    const csv = await fetchCsvString(currentLotData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `ZONING_ANALYSIS_${currentLotData.propertyInfo.block || 'BLOCK'}_${currentLotData.propertyInfo.lot || 'LOT'}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    setStatus('CSV EXPORTED');
   });
 
-  // 2. Export Excel (.xlsx) using SheetJS
   document.getElementById('btnExportExcel').addEventListener('click', async () => {
     if (!currentLotData) return;
-    const csvContent = await generateCsvString(currentLotData);
-    const workbook = XLSX.read(csvContent, { type: 'string' });
+    setStatus('GENERATING EXCEL (.XLSX)...');
+    const csv = await fetchCsvString(currentLotData);
+    const workbook = XLSX.read(csv, { type: 'string' });
     const filename = `ZONING_ANALYSIS_${currentLotData.propertyInfo.block || 'BLOCK'}_${currentLotData.propertyInfo.lot || 'LOT'}.xlsx`;
     XLSX.writeFile(workbook, filename);
+    setStatus('EXCEL EXPORTED');
   });
+}
+
+function setStatus(msg) {
+  const el = document.getElementById('statusBarText');
+  if (el) el.innerText = msg;
 }

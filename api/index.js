@@ -37,7 +37,7 @@ app.get('/api/lot', async (req, res) => {
       return res.status(400).json({ error: 'BBL parameter is required' });
     }
 
-    const sql = `SELECT * FROM dcp_mappluto WHERE bbl = '${bbl.replace(/[^0-9]/g, '')}'`;
+    const sql = `SELECT *, ST_AsGeoJSON(the_geom) as geometry_geojson FROM dcp_mappluto WHERE bbl = '${bbl.replace(/[^0-9]/g, '')}'`;
     const cartoUrl = `https://planninglabs.carto.com/api/v2/sql?q=${encodeURIComponent(sql)}`;
     
     const response = await fetch(cartoUrl);
@@ -62,6 +62,30 @@ app.get('/api/lot', async (req, res) => {
   } catch (err) {
     console.error('Lot resolution error:', err);
     res.status(500).json({ error: 'Failed to retrieve lot details', details: err.message });
+  }
+});
+
+// 2.1 Fetch Surrounding Zoning Districts (ZoLa layer)
+app.get('/api/zoning-surrounding', async (req, res) => {
+  try {
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'lat and lng required' });
+    }
+
+    const sql = `SELECT zonedist, ST_AsGeoJSON(the_geom) as geojson FROM dcp_zoning_districts WHERE ST_DWithin(the_geom, ST_SetSRID(ST_Point(${lng}, ${lat}), 4326), 0.015) LIMIT 25`;
+    const cartoUrl = `https://planninglabs.carto.com/api/v2/sql?q=${encodeURIComponent(sql)}`;
+    
+    const response = await fetch(cartoUrl);
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Carto API error' });
+    }
+    const data = await response.json();
+    res.json(data.rows || []);
+  } catch (err) {
+    console.error('Zoning layer error:', err);
+    res.status(500).json({ error: 'Failed to load zoning layer', details: err.message });
   }
 });
 

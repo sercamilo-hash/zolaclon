@@ -3,555 +3,792 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NYC ZoLa Clone - Zoning Resolution & Analysis Generator</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>NYC ZOLA ZR - EXCEL SPREADSHEET DASHBOARD</title>
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- FontAwesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <!-- SheetJS for Excel export -->
+  <!-- SheetJS -->
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  
   <style>
-    @media print {
-      body { background: white !important; color: black !important; }
-      .no-print { display: none !important; }
-      .print-full { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+    /* Strict Excel Monochromatic Typography & Layout */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      border-radius: 0 !important;
+      font-family: Arial, "Helvetica Neue", Helvetica, sans-serif !important;
     }
-    .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #ffffff;
+      color: #000000;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+
+    /* Excel Ribbon / Formula Bar */
+    .excel-header {
+      background-color: #f3f3f3;
+      border-bottom: 2px solid #000000;
+      padding: 6px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .excel-title {
+      font-size: 13px;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .formula-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #ffffff;
+      border: 1px solid #000000;
+      padding: 2px 6px;
+      min-width: 380px;
+      flex: 1;
+      max-width: 580px;
+      position: relative;
+    }
+
+    .formula-fx {
+      font-weight: bold;
+      font-style: italic;
+      color: #555555;
+      font-size: 12px;
+      user-select: none;
+    }
+
+    .formula-input {
+      border: none;
+      outline: none;
+      width: 100%;
+      font-size: 11px;
+      color: #000000;
+      background: transparent;
+    }
+
+    .excel-btn {
+      background-color: #ffffff;
+      color: #000000;
+      border: 1px solid #000000;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      text-transform: uppercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .excel-btn:hover {
+      background-color: #000000;
+      color: #ffffff;
+    }
+
+    .excel-btn.active {
+      background-color: #000000;
+      color: #ffffff;
+    }
+
+    /* Grid Layout */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      min-height: calc(100vh - 75px);
+      border-bottom: 1px solid #000000;
+    }
+
+    @media (max-width: 1024px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .left-panel {
+      border-right: 2px solid #000000;
+      background-color: #fafafa;
+      display: flex;
+      flex-col;
+      flex-direction: column;
+    }
+
+    .right-panel {
+      background-color: #ffffff;
+      overflow-x: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Map Box */
+    #mapContainer {
+      width: 100%;
+      height: 380px;
+      border-bottom: 2px solid #000000;
+      position: relative;
+      background: #e6e6e6;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .map-toolbar {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #000000;
+      padding: 4px 6px;
+      display: flex;
+      gap: 6px;
+      font-size: 10px;
+    }
+
+    /* Excel Table Styling */
+    table.excel-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: auto;
+      font-size: 11px;
+    }
+
+    table.excel-table th, table.excel-table td {
+      border: 1px solid #000000;
+      padding: 4px 6px;
+      white-space: nowrap;
+    }
+
+    table.excel-table th {
+      background-color: #e6e6e6;
+      font-weight: bold;
+      text-transform: uppercase;
+      text-align: left;
+    }
+
+    table.excel-table td.bold {
+      font-weight: bold;
+    }
+
+    table.excel-table td.header-cell {
+      background-color: #000000;
+      color: #ffffff;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    table.excel-table td.subhead-cell {
+      background-color: #d9d9d9;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    table.excel-table td.numeric {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.excel-table input[type="text"],
+    table.excel-table input[type="number"],
+    table.excel-table select {
+      border: 1px solid #b0b0b0;
+      padding: 2px 4px;
+      width: 100%;
+      background: #ffffff;
+      font-size: 11px;
+      outline: none;
+    }
+
+    table.excel-table input:focus {
+      border: 1px solid #000000;
+      background-color: #f9f9f9;
+    }
+
+    /* Sheet Tabs Bar */
+    .sheet-tabs-bar {
+      background-color: #e6e6e6;
+      border-bottom: 1px solid #000000;
+      display: flex;
+      gap: 1px;
+      padding-left: 8px;
+    }
+
+    .sheet-tab {
+      background-color: #d4d4d4;
+      border: 1px solid #000000;
+      border-bottom: none;
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      text-transform: uppercase;
+      user-select: none;
+    }
+
+    .sheet-tab.active {
+      background-color: #ffffff;
+      border-bottom: 1px solid #ffffff;
+      position: relative;
+      top: 1px;
+    }
+
+    /* Autocomplete Dropdown */
+    #searchDropdown {
+      position: absolute;
+      top: 26px;
+      left: 0;
+      right: 0;
+      background: #ffffff;
+      border: 1px solid #000000;
+      z-index: 2000;
+      max-height: 260px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .search-item {
+      padding: 4px 8px;
+      border-bottom: 1px solid #e0e0e0;
+      cursor: pointer;
+    }
+
+    .search-item:hover {
+      background-color: #000000;
+      color: #ffffff;
+    }
+
+    /* Status Bar */
+    .excel-status-bar {
+      background-color: #f3f3f3;
+      border-top: 1px solid #000000;
+      padding: 3px 12px;
+      font-size: 10px;
+      display: flex;
+      justify-content: space-between;
+      user-select: none;
+    }
+
+    @media print {
+      .no-print { display: none !important; }
+      .dashboard-grid { display: block !important; border: none !important; }
+      .right-panel { width: 100% !important; overflow: visible !important; }
+      table.excel-table th, table.excel-table td { border: 1px solid #000000 !important; }
+    }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
+<body>
 
-  <!-- Header -->
-  <header class="bg-slate-900 text-white shadow-md z-30 sticky top-0 border-b border-slate-700">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
-      <div class="flex items-center space-x-3">
-        <div class="bg-blue-600 text-white p-2 rounded-lg font-black text-xl tracking-wider flex items-center gap-2">
-          <i class="fa-solid fa-layer-group"></i> ZoLa <span class="text-xs bg-blue-800 text-blue-200 px-1.5 py-0.5 rounded font-normal">ZR CLONE</span>
-        </div>
-        <div>
-          <h1 class="text-sm font-semibold text-white">NYC Zoning Resolution & Analysis Tool</h1>
-          <p class="text-xs text-slate-400">MapPLUTO + City of Yes (UAP) + Custom ZR Formatter</p>
-        </div>
-      </div>
-
-      <!-- Quick Search Bar -->
-      <div class="relative flex-1 max-w-lg min-w-[280px]">
-        <div class="relative">
-          <input 
-            type="text" 
-            id="searchInput" 
-            placeholder="Buscar por dirección (ej: 604 Union St, Brooklyn) o BBL..." 
-            class="w-full bg-slate-800 text-white placeholder-slate-400 text-sm rounded-lg pl-10 pr-10 py-2 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400"></i>
-          <button id="clearSearch" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-white">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <!-- Search Results Dropdown -->
-        <div id="searchResults" class="hidden absolute left-0 right-0 top-11 bg-white text-slate-900 rounded-lg shadow-2xl border border-slate-200 max-h-80 overflow-y-auto custom-scroll z-50"></div>
-      </div>
-
-      <!-- Export Actions -->
-      <div class="flex items-center gap-2 no-print">
-        <button id="btnExportCsv" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition">
-          <i class="fa-solid fa-file-csv text-base"></i> Exportar CSV (Tu Formato)
-        </button>
-        <button id="btnExportExcel" class="bg-green-700 hover:bg-green-800 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition">
-          <i class="fa-solid fa-file-excel text-base"></i> Excel (.xlsx)
-        </button>
-        <button onclick="window.print()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition">
-          <i class="fa-solid fa-print"></i> Imprimir
-        </button>
-      </div>
-    </div>
-  </header>
-
-  <!-- Main Content Layout -->
-  <div class="flex-1 max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-5">
-    
-    <!-- Left Column: Map & Lot Quick Card (4 cols) -->
-    <div class="lg:col-span-4 flex flex-col gap-4 no-print">
-      <!-- Mini Map Box -->
-      <div class="bg-white rounded-xl shadow border border-slate-200 overflow-hidden flex flex-col h-[320px]">
-        <div class="bg-slate-800 text-white text-xs font-semibold px-3 py-2 flex items-center justify-between">
-          <span><i class="fa-solid fa-map-location-dot mr-1.5 text-blue-400"></i> NYC Tax Lot Map</span>
-          <span id="mapStatusBadge" class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[11px]">Listo</span>
-        </div>
-        <div id="map" class="flex-1 w-full z-10"></div>
-      </div>
-
-      <!-- Quick Property Card -->
-      <div class="bg-white rounded-xl shadow border border-slate-200 p-4">
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-          <span>Resumen de la Parcela</span>
-          <span id="activeBblBadge" class="text-blue-600 font-mono text-xs">BBL: 4161300035</span>
-        </h3>
-        <div id="quickPropertySummary" class="space-y-2 text-sm">
-          <div class="p-2.5 bg-blue-50 rounded-lg border border-blue-100">
-            <div class="text-xs text-blue-600 font-medium">Dirección / Ubicación</div>
-            <div id="summaryAddress" class="font-bold text-slate-900 text-base">Cargando lote...</div>
-            <div id="summaryBoroughBlock" class="text-xs text-slate-600 mt-0.5">Borough: - | Block: - | Lot: -</div>
-          </div>
-          <div class="grid grid-cols-2 gap-2 text-xs">
-            <div class="p-2 bg-slate-50 rounded border border-slate-100">
-              <span class="text-slate-500 block">Zonificación:</span>
-              <span id="summaryZoning" class="font-bold text-blue-700 text-sm">-</span>
-            </div>
-            <div class="p-2 bg-slate-50 rounded border border-slate-100">
-              <span class="text-slate-500 block">Área de Lote:</span>
-              <span id="summaryLotArea" class="font-bold text-slate-800 text-sm">- SF</span>
-            </div>
-            <div class="p-2 bg-slate-50 rounded border border-slate-100">
-              <span class="text-slate-500 block">Distrito Especial:</span>
-              <span id="summarySpecialDist" class="font-semibold text-slate-700 text-[11px] truncate block">-</span>
-            </div>
-            <div class="p-2 bg-slate-50 rounded border border-slate-100">
-              <span class="text-slate-500 block">Transit Zone:</span>
-              <span id="summaryTransit" class="font-semibold text-emerald-700 text-[11px]">-</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Preset Demo Buttons -->
-      <div class="bg-white rounded-xl shadow border border-slate-200 p-3">
-        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Ejemplos Rápidos</div>
-        <div class="flex flex-col gap-1.5">
-          <button onclick="loadDemoProperty('4161300035')" class="text-left text-xs bg-slate-50 hover:bg-blue-50 p-2 rounded border border-slate-200 hover:border-blue-300 transition flex justify-between items-center">
-            <span><strong>Queens Block 16130 Lot 35</strong> (R6)</span>
-            <i class="fa-solid fa-chevron-right text-slate-400 text-[10px]"></i>
-          </button>
-          <button onclick="loadDemoAddress('604 Union Street, Brooklyn')" class="text-left text-xs bg-slate-50 hover:bg-blue-50 p-2 rounded border border-slate-200 hover:border-blue-300 transition flex justify-between items-center">
-            <span><strong>604 Union St, BK</strong> (M1-4/R7A Gowanus)</span>
-            <i class="fa-solid fa-chevron-right text-slate-400 text-[10px]"></i>
-          </button>
-          <button onclick="loadDemoAddress('120 Broadway, Manhattan')" class="text-left text-xs bg-slate-50 hover:bg-blue-50 p-2 rounded border border-slate-200 hover:border-blue-300 transition flex justify-between items-center">
-            <span><strong>120 Broadway, MN</strong> (C5-5 Equitable)</span>
-            <i class="fa-solid fa-chevron-right text-slate-400 text-[10px]"></i>
-          </button>
-        </div>
-      </div>
+  <!-- Top Excel Ribbon / Formula Bar -->
+  <div class="excel-header no-print">
+    <div class="excel-title">
+      <span>[ ZOLA-ZR ]</span>
+      <span>NYC ZONING & LAND USE SPREADSHEET</span>
     </div>
 
-    <!-- Right Column: Full Zoning Analysis & Schedule Tables (8 cols) -->
-    <div class="lg:col-span-8 flex flex-col gap-5 print-full">
+    <!-- Formula / Search Bar -->
+    <div class="formula-bar">
+      <span class="formula-fx">fx</span>
+      <input type="text" id="searchInput" class="formula-input" placeholder="SEARCH NYC ADDRESS (EG: 604 UNION ST, BK) OR 10-DIGIT BBL..." autocomplete="off" />
+      <button id="btnSearchSubmit" class="excel-btn" style="padding: 1px 6px; font-size: 10px;">ENTER</button>
+      <div id="searchDropdown"></div>
+    </div>
 
-      <!-- Navigation Tabs -->
-      <div class="bg-white rounded-xl shadow border border-slate-200 p-1 flex gap-1 no-print">
-        <button id="tabBtn1" onclick="switchTab('zoning')" class="tab-btn flex-1 py-2 px-3 text-xs font-bold rounded-lg bg-blue-600 text-white transition flex items-center justify-center gap-1.5">
-          <i class="fa-solid fa-calculator"></i> 1. Zoning Analysis & FAR
-        </button>
-        <button id="tabBtn2" onclick="switchTab('building')" class="tab-btn flex-1 py-2 px-3 text-xs font-bold rounded-lg text-slate-600 hover:bg-slate-100 transition flex items-center justify-center gap-1.5">
-          <i class="fa-solid fa-building"></i> 2. Floor Schedules (Bldg A/B)
-        </button>
-        <button id="tabBtn3" onclick="switchTab('clauses')" class="tab-btn flex-1 py-2 px-3 text-xs font-bold rounded-lg text-slate-600 hover:bg-slate-100 transition flex items-center justify-center gap-1.5">
-          <i class="fa-solid fa-book-bookmark"></i> 3. Cláusulas ZR Resolution
-        </button>
-        <button id="tabBtn4" onclick="switchTab('preview')" class="tab-btn flex-1 py-2 px-3 text-xs font-bold rounded-lg text-slate-600 hover:bg-slate-100 transition flex items-center justify-center gap-1.5">
-          <i class="fa-solid fa-file-lines"></i> 4. Vista Previa CSV
-        </button>
+    <!-- Excel Export Actions -->
+    <div style="display: flex; gap: 4px;">
+      <button id="btnExportCsv" class="excel-btn">EXPORT CSV</button>
+      <button id="btnExportExcel" class="excel-btn">EXPORT EXCEL (.XLSX)</button>
+      <button onclick="window.print()" class="excel-btn">PRINT</button>
+    </div>
+  </div>
+
+  <!-- Main Spreadsheet Layout -->
+  <div class="dashboard-grid">
+
+    <!-- Left Column: Map & Property Card -->
+    <div class="left-panel">
+      <!-- Interactive Map with ZoLa Layers -->
+      <div id="mapContainer">
+        <div id="map"></div>
+        <div class="map-toolbar no-print">
+          <label style="cursor: pointer;"><input type="checkbox" id="chkZoningLayer" checked onchange="toggleZoningLayer()"> <strong>ZR DISTRICTS</strong></label>
+          <label style="cursor: pointer;"><input type="checkbox" id="chkTaxLotLayer" checked onchange="toggleLotPolygon()"> <strong>TAX LOT</strong></label>
+          <select id="mapBaseSelect" onchange="changeBaseMap(this.value)" style="border: 1px solid #000; font-size: 10px;">
+            <option value="carto">MONOCHROME (CARTO)</option>
+            <option value="satellite">SATELLITE (ESRI)</option>
+            <option value="osm">OPENSTREETMAP</option>
+          </select>
+        </div>
       </div>
 
-      <!-- TAB 1: ZONING ANALYSIS (Property Info, FAR, Lot Coverage, Yards, Height, Parking) -->
-      <div id="tabContentZoning" class="tab-content flex flex-col gap-4">
+      <!-- Quick Property Specs (Excel Table) -->
+      <div style="padding: 8px; flex: 1; overflow-y: auto;">
+        <table class="excel-table">
+          <thead>
+            <tr>
+              <th colspan="2" style="background: #000; color: #fff;">SELECTED TAX LOT SUMMARY</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="bold" style="width: 140px;">BBL:</td>
+              <td id="lblBbl" class="bold">-</td>
+            </tr>
+            <tr>
+              <td class="bold">ADDRESS:</td>
+              <td id="lblAddress" class="bold">-</td>
+            </tr>
+            <tr>
+              <td class="bold">BOROUGH / BLOCK / LOT:</td>
+              <td id="lblBoroughBlockLot">-</td>
+            </tr>
+            <tr>
+              <td class="bold">ZONING DISTRICT(S):</td>
+              <td id="lblZoning" class="bold">-</td>
+            </tr>
+            <tr>
+              <td class="bold">SPECIAL DISTRICT:</td>
+              <td id="lblSpecialDist">-</td>
+            </tr>
+            <tr>
+              <td class="bold">TOTAL LOT AREA:</td>
+              <td id="lblLotArea" class="bold numeric">- SF</td>
+            </tr>
+            <tr>
+              <td class="bold">FLOOD ZONE:</td>
+              <td id="lblFloodZone">-</td>
+            </tr>
+            <tr>
+              <td class="bold">TRANSIT ZONE:</td>
+              <td id="lblTransitZone">-</td>
+            </tr>
+            <tr>
+              <td class="bold">OER HAZARD:</td>
+              <td id="lblOer">-</td>
+            </tr>
+          </tbody>
+        </table>
 
-        <!-- 1.1 Property Information Section -->
-        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
-          <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
-            <h2 class="text-sm font-black text-slate-900 tracking-wide uppercase flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-blue-600"></span> Property Information
-            </h2>
-            <span class="text-xs bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded">Zoning Resolution Sheet</span>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">BOROUGH</label>
-              <input id="propBorough" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-bold" />
-            </div>
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">BLOCK</label>
-              <input id="propBlock" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-bold" />
-            </div>
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">LOT</label>
-              <input id="propLot" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-bold" />
-            </div>
-
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">ZONING DISTRICT</label>
-              <input id="propZoningDistrict" type="text" class="w-full bg-blue-50 border border-blue-200 text-blue-900 rounded p-1.5 font-bold" />
-            </div>
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">SPECIAL ZONING DISTRICT</label>
-              <input id="propSpecialDistrict" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
-            </div>
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">SPECIAL SUBDISTRICT</label>
-              <input id="propSpecialSubdistrict" type="text" value="N/A" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
-            </div>
-
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">TOTAL LOT AREA (SF)</label>
-              <input id="propLotArea" type="number" step="0.01" onchange="recalculateZoning()" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-bold text-slate-900" />
-            </div>
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">LOT TYPE</label>
-              <select id="propLotType" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium">
-                <option value="INTERIOR LOT">INTERIOR LOT</option>
-                <option value="CORNER LOT">CORNER LOT</option>
-                <option value="THROUGH LOT">THROUGH LOT</option>
-                <option value="THROUGH LOT, INTERIOR LOT">THROUGH LOT, INTERIOR LOT</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">SHALLOW LOT</label>
-              <select id="propShallowLot" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium">
-                <option value="YES">YES</option>
-                <option value="NO">NO</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">MIH SITE</label>
-              <input id="propMihSite" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
-            </div>
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">FLOOD ZONE</label>
-              <input id="propFloodZone" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
-            </div>
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">ELEGIBLE SITE</label>
-              <input id="propEligibleSite" type="text" value="YES" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
-            </div>
-
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">OER HAZARD</label>
-              <input id="propOerHazard" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
-            </div>
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">COMMUNITY BOARD</label>
-              <input id="propCommunityBoard" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
-            </div>
-            <div>
-              <label class="block text-slate-400 font-semibold mb-1">ZONING MAP</label>
-              <input id="propZoningMap" type="text" class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium" />
-            </div>
-          </div>
-        </div>
-
-        <!-- 1.2 Floor Area (Residential & Commercial) -->
-        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
-          <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
-            <h2 class="text-sm font-black text-slate-900 tracking-wide uppercase flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> Floor Area & FAR Regulations
-            </h2>
-            <span class="text-xs text-slate-500">Incluye City of Yes (UAP)</span>
-          </div>
-
-          <!-- Residential Table -->
-          <div class="overflow-x-auto mb-4">
-            <table class="w-full text-xs text-left border border-slate-200 rounded-lg overflow-hidden">
-              <thead class="bg-slate-100 text-slate-700 font-bold">
-                <tr>
-                  <th class="p-2 border-b">RESIDENTIAL FLOOR AREA</th>
-                  <th class="p-2 border-b text-center">MAX FAR</th>
-                  <th class="p-2 border-b text-right">MAX ZFA (SF)</th>
-                  <th class="p-2 border-b text-right">PROPOSED</th>
-                  <th class="p-2 border-b text-right">REMAINING</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100 font-medium">
-                <tr>
-                  <td class="p-2 font-semibold">RESIDENTIAL FLOOR AREA STANDARD</td>
-                  <td class="p-2 text-center"><input id="resFarStd" type="number" step="0.01" onchange="recalculateZoning()" class="w-16 text-center border rounded p-1" /></td>
-                  <td class="p-2 text-right font-mono" id="resZfaStd">-</td>
-                  <td class="p-2 text-right"><input id="resPropStd" type="number" step="0.01" onchange="recalculateZoning()" value="0" class="w-24 text-right border rounded p-1" /></td>
-                  <td class="p-2 text-right font-mono font-bold text-emerald-600" id="resRemStd">-</td>
-                </tr>
-                <tr>
-                  <td class="p-2 font-semibold">RESIDENTIAL FLOOR AREA STANDARD + 20% (UAP)</td>
-                  <td class="p-2 text-center"><input id="resFarUap" type="number" step="0.01" onchange="recalculateZoning()" class="w-16 text-center border rounded p-1 font-bold text-blue-600" /></td>
-                  <td class="p-2 text-right font-mono font-bold text-blue-900" id="resZfaUap">-</td>
-                  <td class="p-2 text-right"><input id="resPropUap" type="number" step="0.01" onchange="recalculateZoning()" value="0" class="w-24 text-right border rounded p-1" /></td>
-                  <td class="p-2 text-right font-mono font-bold text-emerald-600" id="resRemUap">-</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Amenities Deductions -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-4">
-            <div class="p-2.5 bg-slate-50 border border-slate-200 rounded flex justify-between items-center">
-              <span class="font-semibold text-slate-700">ALLOWED AMENITIES DEDUCTIONS (5%):</span>
-              <span id="resAllowedAmenities" class="font-mono font-bold text-slate-900">- SF</span>
-            </div>
-            <div class="p-2.5 bg-slate-50 border border-slate-200 rounded flex justify-between items-center">
-              <span class="font-semibold text-slate-700">REQUIRED AMENITIES (3%):</span>
-              <span id="resRequiredAmenities" class="font-mono font-bold text-slate-900">- SF</span>
-            </div>
-          </div>
-
-          <!-- Commercial Table -->
-          <div class="overflow-x-auto">
-            <table class="w-full text-xs text-left border border-slate-200 rounded-lg overflow-hidden">
-              <thead class="bg-slate-100 text-slate-700 font-bold">
-                <tr>
-                  <th class="p-2 border-b">COMMERCIAL FLOOR AREA</th>
-                  <th class="p-2 border-b text-center">MAX FAR</th>
-                  <th class="p-2 border-b text-right">MAX ZFA (SF)</th>
-                  <th class="p-2 border-b text-right">PROPOSED</th>
-                  <th class="p-2 border-b text-right">REMAINING</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100 font-medium">
-                <tr>
-                  <td class="p-2 font-semibold">COMMERCIAL FLOOR AREA</td>
-                  <td class="p-2 text-center"><input id="commFarInput" type="number" step="0.01" onchange="recalculateZoning()" class="w-16 text-center border rounded p-1" /></td>
-                  <td class="p-2 text-right font-mono" id="commZfaMax">-</td>
-                  <td class="p-2 text-right"><input id="commPropInput" type="number" step="0.01" onchange="recalculateZoning()" value="0" class="w-24 text-right border rounded p-1" /></td>
-                  <td class="p-2 text-right font-mono font-bold text-emerald-600" id="commRem">-</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- 1.3 Lot Coverage, Yards, Height, Density & Parking -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <!-- Lot Coverage & Yards -->
-          <div class="bg-white rounded-xl shadow border border-slate-200 p-4 text-xs">
-            <h3 class="font-bold text-slate-900 uppercase border-b pb-2 mb-3">Lot Coverage & Yards</h3>
-            <div class="space-y-2">
-              <div class="flex justify-between items-center">
-                <span>Res. Coverage within 100' corner:</span>
-                <span class="font-bold">1.0 (100%)</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Res. Coverage beyond 100' corner:</span>
-                <span class="font-bold">0.65 (65%)</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Front Yard:</span>
-                <span class="font-bold text-slate-600">NOT REQUIRED</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Side Yard:</span>
-                <span class="font-bold text-slate-600">NOT REQUIRED</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Rear Yard (< 75'-0"):</span>
-                <span class="font-bold">10'-0" Allowed | 10'-4" Prop.</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Rear Yard (> 75'-0"):</span>
-                <span class="font-bold">30'-0" Allowed</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Height, Setback, Density & Parking -->
-          <div class="bg-white rounded-xl shadow border border-slate-200 p-4 text-xs">
-            <h3 class="font-bold text-slate-900 uppercase border-b pb-2 mb-3">Height, Density & Parking</h3>
-            <div class="space-y-2">
-              <div class="flex justify-between items-center">
-                <span>Min Base Height:</span>
-                <span id="hMinBase" class="font-bold">30'-0"</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Max Base Height:</span>
-                <span id="hMaxBase" class="font-bold">65'-0"</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Max Building Height:</span>
-                <span id="hMaxBldg" class="font-bold text-blue-700">125'-0"</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Max Allowed Density (Units):</span>
-                <span id="densityMaxUnits" class="font-bold font-mono text-emerald-700 text-sm">126</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Parking Transit Zone:</span>
-                <span id="pkTransitZone" class="font-semibold text-slate-700 text-[11px]">SPECIAL 25-241</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Bicycle Parking Spaces:</span>
-                <span id="pkBikeSpaces" class="font-bold font-mono">63</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- TAB 2: FLOOR SCHEDULES (Building A, Building B, Consolidation) -->
-      <div id="tabContentBuilding" class="tab-content hidden flex flex-col gap-5">
-        
-        <!-- Building A -->
-        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
-          <div class="flex items-center justify-between border-b pb-3 mb-3">
-            <h2 class="text-sm font-black text-slate-900 tracking-wide uppercase flex items-center gap-2">
-              <i class="fa-solid fa-hotel text-blue-600"></i> Building A - Floor-by-Floor Schedule
-            </h2>
-            <button onclick="addFloorRow('A')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded font-semibold transition">
-              <i class="fa-solid fa-plus mr-1"></i> Agregar Nivel
+        <!-- Quick Demo Selectors -->
+        <div class="no-print" style="margin-top: 10px;">
+          <div style="font-weight: bold; margin-bottom: 4px; text-transform: uppercase;">LOAD SAMPLE LOTS:</div>
+          <div style="display: flex; flex-direction: column; gap: 3px;">
+            <button onclick="loadLotByBbl('4161300035')" class="excel-btn" style="text-align: left; justify-content: space-between;">
+              <span>QUEENS BLK 16130 LOT 35 (R6)</span> <span>BBL: 4161300035</span>
+            </button>
+            <button onclick="loadLotByBbl('3004410021')" class="excel-btn" style="text-align: left; justify-content: space-between;">
+              <span>604 UNION ST, BK (M1-4/R7A GOWANUS)</span> <span>BBL: 3004410021</span>
+            </button>
+            <button onclick="loadLotByBbl('1000477501')" class="excel-btn" style="text-align: left; justify-content: space-between;">
+              <span>120 BROADWAY, MN (C5-5 LOWER MANHATTAN)</span> <span>BBL: 1000477501</span>
             </button>
           </div>
-          <div class="overflow-x-auto custom-scroll">
-            <table class="w-full text-xs text-left border border-slate-200 rounded min-w-[900px]" id="tableBldgA">
-              <thead class="bg-slate-800 text-white text-[11px]">
-                <tr>
-                  <th class="p-1.5 border">LEVEL</th>
-                  <th class="p-1.5 border text-right">RES GFA</th>
-                  <th class="p-1.5 border text-right">COMM GFA</th>
-                  <th class="p-1.5 border text-right">CHASE</th>
-                  <th class="p-1.5 border text-right">MECH</th>
-                  <th class="p-1.5 border text-right">PARKING</th>
-                  <th class="p-1.5 border text-right">BIKE</th>
-                  <th class="p-1.5 border text-right">AMENITIES</th>
-                  <th class="p-1.5 border text-right">CORRIDOR</th>
-                  <th class="p-1.5 border text-right">REFUSE</th>
-                  <th class="p-1.5 border text-right">NET FA</th>
-                  <th class="p-1.5 border text-right">5% ENERGY</th>
-                  <th class="p-1.5 border text-right bg-blue-900">ZFA</th>
-                  <th class="p-1.5 border text-center">STUDIO</th>
-                  <th class="p-1.5 border text-center">1BR</th>
-                  <th class="p-1.5 border text-center">2BR</th>
-                  <th class="p-1.5 border text-center font-bold">TOTAL</th>
-                </tr>
-              </thead>
-              <tbody id="tbodyBldgA" class="divide-y divide-slate-100"></tbody>
-              <tfoot id="tfootBldgA" class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300"></tfoot>
-            </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Full Zoning Resolution Spreadsheet -->
+    <div class="right-panel">
+      <!-- Sheet Tabs Bar -->
+      <div class="sheet-tabs-bar no-print">
+        <div id="tab1" class="sheet-tab active" onclick="switchSheet('zoning')">SHEET 1: ZONING ANALYSIS</div>
+        <div id="tab2" class="sheet-tab" onclick="switchSheet('building')">SHEET 2: BUILDING SCHEDULES (A / B)</div>
+        <div id="tab3" class="sheet-tab" onclick="switchSheet('clauses')">SHEET 3: ZR RESOLUTION CLAUSES</div>
+        <div id="tab4" class="sheet-tab" onclick="switchSheet('preview')">SHEET 4: CSV RAW PREVIEW</div>
+      </div>
+
+      <!-- SHEET 1: ZONING ANALYSIS -->
+      <div id="sheetZoning" style="padding: 10px; overflow-x: auto;">
+        <table class="excel-table">
+          <tbody>
+            <tr>
+              <td colspan="4" class="header-cell">ZONING ANALYSIS</td>
+            </tr>
+            <tr>
+              <td colspan="4" class="subhead-cell">PROPERTY INFORMATION</td>
+            </tr>
+            <tr>
+              <td class="bold" style="width: 220px;">BOROUGH</td>
+              <td colspan="3"><input type="text" id="propBorough" /></td>
+            </tr>
+            <tr>
+              <td class="bold">BLOCK</td>
+              <td colspan="3"><input type="text" id="propBlock" /></td>
+            </tr>
+            <tr>
+              <td class="bold">LOT</td>
+              <td colspan="3"><input type="text" id="propLot" /></td>
+            </tr>
+            <tr>
+              <td class="bold">ZONING DISTRICT</td>
+              <td colspan="3"><input type="text" id="propZoningDistrict" class="bold" /></td>
+            </tr>
+            <tr>
+              <td class="bold">SPECIAL ZONING DISTRICT</td>
+              <td colspan="3"><input type="text" id="propSpecialDistrict" /></td>
+            </tr>
+            <tr>
+              <td class="bold">SPECIAL SUBDISTRICT</td>
+              <td colspan="3"><input type="text" id="propSpecialSubdistrict" value="N/A" /></td>
+            </tr>
+            <tr>
+              <td class="bold">TOTAL LOT AREA (SF)</td>
+              <td colspan="3"><input type="number" step="0.01" id="propLotArea" onchange="recalculateZoning()" class="bold" /></td>
+            </tr>
+            <tr>
+              <td class="bold">LOT TYPE</td>
+              <td colspan="3"><input type="text" id="propLotType" /></td>
+            </tr>
+            <tr>
+              <td class="bold">SHALLOW LOT</td>
+              <td colspan="3"><input type="text" id="propShallowLot" /></td>
+            </tr>
+            <tr>
+              <td class="bold">MIH SITE</td>
+              <td colspan="3"><input type="text" id="propMihSite" /></td>
+            </tr>
+            <tr>
+              <td class="bold">FLOOD ZONE</td>
+              <td colspan="3"><input type="text" id="propFloodZone" /></td>
+            </tr>
+            <tr>
+              <td class="bold">ELEGIBLE SITE</td>
+              <td colspan="3"><input type="text" id="propEligibleSite" value="YES" /></td>
+            </tr>
+            <tr>
+              <td class="bold">OER HAZARD</td>
+              <td colspan="3"><input type="text" id="propOerHazard" /></td>
+            </tr>
+
+            <!-- USE REGULATIONS -->
+            <tr>
+              <td colspan="4" class="subhead-cell">USE REGULATIONS</td>
+            </tr>
+            <tr>
+              <td class="bold"></td>
+              <td class="bold">ALLOWED</td>
+              <td colspan="2" class="bold">PROPOSED</td>
+            </tr>
+            <tr>
+              <td class="bold">USES GROUPS</td>
+              <td><input type="text" id="propUsesAllowed" value="I, II, III, IV, V, VI, VII, VIII, IX" /></td>
+              <td colspan="2"><input type="text" id="propUsesProposed" value="II, VI" /></td>
+            </tr>
+            <tr>
+              <td class="bold">STREETSCAPE CLASIFICATION</td>
+              <td colspan="3"><input type="text" id="propStreetscapeClass" value="N/A" /></td>
+            </tr>
+            <tr>
+              <td class="bold">STREETSCAPE MODIFICATIONS</td>
+              <td colspan="3"><input type="text" id="propStreetscapeMods" value="N/A" /></td>
+            </tr>
+
+            <!-- RESIDENTIAL FLOOR AREA -->
+            <tr>
+              <td colspan="4" class="subhead-cell">RESIDENTIAL FLOOR AREA</td>
+            </tr>
+            <tr>
+              <td class="bold">ITEM</td>
+              <td class="bold numeric">MAX FAR</td>
+              <td class="bold numeric">MAX ZFA (SF)</td>
+              <td class="bold numeric">PROPOSED / REMAINING</td>
+            </tr>
+            <tr>
+              <td class="bold">RESIDENTIAL FLOOR AREA STANDARD</td>
+              <td><input type="number" step="0.01" id="resFarStd" onchange="recalculateZoning()" class="numeric" /></td>
+              <td id="resZfaStd" class="numeric bold">-</td>
+              <td id="resRemStd" class="numeric">-</td>
+            </tr>
+            <tr>
+              <td class="bold">RESIDENTIAL FLOOR AREA STANDARD + 20% (UAP)</td>
+              <td><input type="number" step="0.01" id="resFarUap" onchange="recalculateZoning()" class="numeric bold" /></td>
+              <td id="resZfaUap" class="numeric bold">-</td>
+              <td id="resRemUap" class="numeric bold">-</td>
+            </tr>
+            <tr>
+              <td class="bold">ALLOWED AMENITIES DEDUCTIONS (5%)</td>
+              <td colspan="3" id="resAllowedAmenities" class="numeric bold">- SF</td>
+            </tr>
+            <tr>
+              <td class="bold">REQUIRED AMENITES (3%)</td>
+              <td colspan="3" id="resRequiredAmenities" class="numeric bold">- SF</td>
+            </tr>
+
+            <!-- COMMERCIAL FLOOR AREA -->
+            <tr>
+              <td colspan="4" class="subhead-cell">COMMERCIAL FLOOR AREA</td>
+            </tr>
+            <tr>
+              <td class="bold">COMMERCIAL FLOOR AREA</td>
+              <td><input type="number" step="0.01" id="commFarInput" onchange="recalculateZoning()" class="numeric" /></td>
+              <td id="commZfaMax" class="numeric bold">-</td>
+              <td id="commRem" class="numeric">-</td>
+            </tr>
+
+            <!-- LOT COVERAGE -->
+            <tr>
+              <td colspan="4" class="subhead-cell">LOT COVERAGE</td>
+            </tr>
+            <tr>
+              <td class="bold">COVERAGE LOCATION</td>
+              <td class="bold numeric">ALLOWED</td>
+              <td colspan="2" class="bold">PROPOSED</td>
+            </tr>
+            <tr>
+              <td>RES. LOT COVERAGE WITHIN 100' OF CORNER</td>
+              <td class="numeric bold">1.0 (100%)</td>
+              <td colspan="2"><input type="text" id="covWithin" value="TBD" /></td>
+            </tr>
+            <tr>
+              <td>RES. LOT COVERAGE BEYOND 100' OF CORNER</td>
+              <td class="numeric bold">0.5 (50%) / 0.65</td>
+              <td colspan="2"><input type="text" id="covBeyond" value="TBD" /></td>
+            </tr>
+            <tr>
+              <td>COMMUNITY LOT COVERAGE</td>
+              <td class="numeric bold">0.65 (65%)</td>
+              <td colspan="2"><input type="text" id="covComm" value="TBD" /></td>
+            </tr>
+
+            <!-- YARDS -->
+            <tr>
+              <td colspan="4" class="subhead-cell">YARDS</td>
+            </tr>
+            <tr>
+              <td class="bold">YARD TYPE</td>
+              <td class="bold">REQUIRED</td>
+              <td colspan="2" class="bold">PROPOSED</td>
+            </tr>
+            <tr>
+              <td>FRONT YARD</td>
+              <td>NOT REQUIRED</td>
+              <td colspan="2"><input type="text" value="NOT REQUIRED" /></td>
+            </tr>
+            <tr>
+              <td>SIDE YARD</td>
+              <td>NOT REQUIRED</td>
+              <td colspan="2"><input type="text" value="NOT REQUIRED" /></td>
+            </tr>
+            <tr>
+              <td>REAR YARD BELOW 75'-0"</td>
+              <td class="bold">10'-0"</td>
+              <td colspan="2"><input type="text" value="10'-4"" /></td>
+            </tr>
+            <tr>
+              <td>REAR YARD ABOVE 75'-0"</td>
+              <td class="bold">30'-0"</td>
+              <td colspan="2"><input type="text" value="N/A" /></td>
+            </tr>
+
+            <!-- HEIGHT AND SETBACK -->
+            <tr>
+              <td colspan="4" class="subhead-cell">HEIGHT AND SETBACK</td>
+            </tr>
+            <tr>
+              <td class="bold">REGULATION</td>
+              <td class="bold">REQUIRED / ALLOWED</td>
+              <td colspan="2" class="bold">PROPOSED</td>
+            </tr>
+            <tr>
+              <td>MIN BASE HEIGHT</td>
+              <td id="hMinBase" class="bold">30'-0"</td>
+              <td colspan="2"><input type="text" value="N/A" /></td>
+            </tr>
+            <tr>
+              <td>MAX BASE HEIGHT</td>
+              <td id="hMaxBase" class="bold">65'-0"</td>
+              <td colspan="2"><input type="text" value="65'-0"" /></td>
+            </tr>
+            <tr>
+              <td>MAX BUILDING HEIGHT</td>
+              <td id="hMaxBldg" class="bold">125'-0"</td>
+              <td colspan="2"><input type="text" value="65'-0"" /></td>
+            </tr>
+
+            <!-- DENSITY & PARKING -->
+            <tr>
+              <td colspan="4" class="subhead-cell">DENSITY & PARKING</td>
+            </tr>
+            <tr>
+              <td class="bold">MAX ALLOWED DENSITY (UNITS @ FACTOR 680)</td>
+              <td id="densityMaxUnits" class="bold numeric">126</td>
+              <td colspan="2"><input type="number" id="propDensityUnits" value="126" class="bold" /></td>
+            </tr>
+            <tr>
+              <td class="bold">TRANSIT ZONE</td>
+              <td colspan="3" id="pkTransitZone" class="bold">SPECIAL 25-241 PARKING PROVISIONS</td>
+            </tr>
+            <tr>
+              <td class="bold">REQUIRED PARKING FOR AFFORDABLE</td>
+              <td class="numeric">0</td>
+              <td colspan="2"><input type="number" value="0" /></td>
+            </tr>
+            <tr>
+              <td class="bold">REQUIRED PARKING FOR MARKET RATE</td>
+              <td class="numeric">50</td>
+              <td colspan="2"><input type="number" value="50" /></td>
+            </tr>
+            <tr>
+              <td class="bold">REQUIRED BICYCLE PARKING (1 PER 2 UNITS)</td>
+              <td colspan="3" id="pkBikeSpaces" class="bold numeric">63 SPACES</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- SHEET 2: BUILDING SCHEDULES -->
+      <div id="sheetBuilding" style="padding: 10px; display: none; overflow-x: auto;">
+        <!-- Building A -->
+        <div style="margin-bottom: 15px;">
+          <div style="background: #000; color: #fff; padding: 4px 8px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
+            <span>BUILDING A - FLOOR-BY-FLOOR SCHEDULE</span>
+            <button onclick="addFloorRow('A')" class="excel-btn no-print" style="padding: 1px 6px; font-size: 10px;">+ ADD ROW</button>
           </div>
+          <table class="excel-table" id="tableBldgA">
+            <thead>
+              <tr>
+                <th>LEVEL</th>
+                <th class="numeric">RES GFA</th>
+                <th class="numeric">COMM GFA</th>
+                <th class="numeric">CHASE</th>
+                <th class="numeric">MECH</th>
+                <th class="numeric">PARKING</th>
+                <th class="numeric">BIKE</th>
+                <th class="numeric">AMENITIES</th>
+                <th class="numeric">CORRIDOR</th>
+                <th class="numeric">REFUSE</th>
+                <th class="numeric">NET FA</th>
+                <th class="numeric">5% ENERGY</th>
+                <th class="numeric" style="background: #000; color: #fff;">ZFA</th>
+                <th style="text-align: center;">STUDIO</th>
+                <th style="text-align: center;">1BR</th>
+                <th style="text-align: center;">2BR</th>
+                <th style="text-align: center;" class="bold">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyBldgA"></tbody>
+            <tfoot id="tfootBldgA" style="background: #e6e6e6; font-weight: bold;"></tfoot>
+          </table>
         </div>
 
         <!-- Building B -->
-        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
-          <div class="flex items-center justify-between border-b pb-3 mb-3">
-            <h2 class="text-sm font-black text-slate-900 tracking-wide uppercase flex items-center gap-2">
-              <i class="fa-solid fa-city text-emerald-600"></i> Building B - Floor-by-Floor Schedule
-            </h2>
-            <button onclick="addFloorRow('B')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded font-semibold transition">
-              <i class="fa-solid fa-plus mr-1"></i> Agregar Nivel
-            </button>
+        <div style="margin-bottom: 15px;">
+          <div style="background: #000; color: #fff; padding: 4px 8px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
+            <span>BUILDING B - FLOOR-BY-FLOOR SCHEDULE</span>
+            <button onclick="addFloorRow('B')" class="excel-btn no-print" style="padding: 1px 6px; font-size: 10px;">+ ADD ROW</button>
           </div>
-          <div class="overflow-x-auto custom-scroll">
-            <table class="w-full text-xs text-left border border-slate-200 rounded min-w-[900px]" id="tableBldgB">
-              <thead class="bg-slate-800 text-white text-[11px]">
-                <tr>
-                  <th class="p-1.5 border">LEVEL</th>
-                  <th class="p-1.5 border text-right">RES GFA</th>
-                  <th class="p-1.5 border text-right">COMM GFA</th>
-                  <th class="p-1.5 border text-right">CHASE</th>
-                  <th class="p-1.5 border text-right">MECH</th>
-                  <th class="p-1.5 border text-right">PARKING</th>
-                  <th class="p-1.5 border text-right">BIKE</th>
-                  <th class="p-1.5 border text-right">AMENITIES</th>
-                  <th class="p-1.5 border text-right">CORRIDOR</th>
-                  <th class="p-1.5 border text-right">REFUSE</th>
-                  <th class="p-1.5 border text-right">NET FA</th>
-                  <th class="p-1.5 border text-right">5% ENERGY</th>
-                  <th class="p-1.5 border text-right bg-emerald-900">ZFA</th>
-                  <th class="p-1.5 border text-center">STUDIO</th>
-                  <th class="p-1.5 border text-center">1BR</th>
-                  <th class="p-1.5 border text-center">2BR</th>
-                  <th class="p-1.5 border text-center font-bold">TOTAL</th>
-                </tr>
-              </thead>
-              <tbody id="tbodyBldgB" class="divide-y divide-slate-100"></tbody>
-              <tfoot id="tfootBldgB" class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300"></tfoot>
-            </table>
-          </div>
+          <table class="excel-table" id="tableBldgB">
+            <thead>
+              <tr>
+                <th>LEVEL</th>
+                <th class="numeric">RES GFA</th>
+                <th class="numeric">COMM GFA</th>
+                <th class="numeric">CHASE</th>
+                <th class="numeric">MECH</th>
+                <th class="numeric">PARKING</th>
+                <th class="numeric">BIKE</th>
+                <th class="numeric">AMENITIES</th>
+                <th class="numeric">CORRIDOR</th>
+                <th class="numeric">REFUSE</th>
+                <th class="numeric">NET FA</th>
+                <th class="numeric">5% ENERGY</th>
+                <th class="numeric" style="background: #000; color: #fff;">ZFA</th>
+                <th style="text-align: center;">STUDIO</th>
+                <th style="text-align: center;">1BR</th>
+                <th style="text-align: center;">2BR</th>
+                <th style="text-align: center;" class="bold">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyBldgB"></tbody>
+            <tfoot id="tfootBldgB" style="background: #e6e6e6; font-weight: bold;"></tfoot>
+          </table>
         </div>
 
-        <!-- Combined Totals & Affordable Housing / 485x Summary -->
-        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
-          <h3 class="font-bold text-slate-900 uppercase border-b pb-2 mb-3 flex items-center justify-between">
-            <span>Totales Consolidados & Programa 485x / Asequibilidad</span>
-            <span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-mono font-bold" id="badgeTotalUnits">126 Unidades</span>
-          </h3>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div class="p-3 bg-slate-50 border rounded">
-              <span class="text-slate-500 block">ZFA Total Combinada:</span>
-              <span id="combZfaTotal" class="font-mono font-bold text-base text-blue-900">58,273.28 SF</span>
-            </div>
-            <div class="p-3 bg-slate-50 border rounded">
-              <span class="text-slate-500 block">Unidades Asequibles (485x):</span>
-              <span id="combAffordableUnits" class="font-mono font-bold text-base text-emerald-700">26 Unidades</span>
-            </div>
-            <div class="p-3 bg-slate-50 border rounded">
-              <span class="text-slate-500 block">Unidades a Mercado:</span>
-              <span id="combMarketUnits" class="font-mono font-bold text-base text-slate-800">100 Unidades</span>
-            </div>
-            <div class="p-3 bg-slate-50 border rounded">
-              <span class="text-slate-500 block">Bicicletas Requeridas:</span>
-              <span id="combBikeParking" class="font-mono font-bold text-base text-slate-800">63 Plazas</span>
-            </div>
-          </div>
-        </div>
-
+        <!-- Consolidated Summary -->
+        <table class="excel-table">
+          <thead>
+            <tr>
+              <th colspan="2" class="header-cell">CONSOLIDATED TOTALS & 485X AFFORDABILITY</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="bold" style="width: 260px;">TOTAL ZONING FLOOR AREA (ZFA):</td>
+              <td id="combZfaTotal" class="bold numeric">- SF</td>
+            </tr>
+            <tr>
+              <td class="bold">TOTAL DWELLING UNITS:</td>
+              <td id="badgeTotalUnits" class="bold numeric">-</td>
+            </tr>
+            <tr>
+              <td class="bold">485X AFFORDABLE UNITS (25%):</td>
+              <td id="combAffordableUnits" class="bold numeric">-</td>
+            </tr>
+            <tr>
+              <td class="bold">MARKET RATE UNITS:</td>
+              <td id="combMarketUnits" class="bold numeric">-</td>
+            </tr>
+            <tr>
+              <td class="bold">REQUIRED BIKE PARKING:</td>
+              <td id="combBikeParking" class="bold numeric">-</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
-      <!-- TAB 3: ZR RESOLUTION CLAUSES -->
-      <div id="tabContentClauses" class="tab-content hidden flex flex-col gap-4">
-        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
-          <div class="flex items-center justify-between border-b pb-3 mb-4">
-            <div>
-              <h2 class="text-sm font-black text-slate-900 tracking-wide uppercase">
-                <i class="fa-solid fa-gavel text-blue-600 mr-1.5"></i> Matriz de Cláusulas Zoning Resolution (ZR)
-              </h2>
-              <p class="text-xs text-slate-500 mt-0.5">Artículos de NYC Zoning Resolution adaptados al distrito seleccionado</p>
-            </div>
-            <button onclick="addZrClauseRow()" class="bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs px-3 py-1.5 rounded font-semibold transition">
-              <i class="fa-solid fa-plus mr-1"></i> Añadir Artículo
-            </button>
-          </div>
-
-          <div class="overflow-x-auto custom-scroll">
-            <table class="w-full text-xs text-left border border-slate-200 rounded min-w-[700px]">
-              <thead class="bg-slate-100 text-slate-700 font-bold">
-                <tr>
-                  <th class="p-2 border w-28">SECCIÓN ZR</th>
-                  <th class="p-2 border w-48">TÍTULO / DESCRIPCIÓN</th>
-                  <th class="p-2 border">REGULACIÓN OFICIAL NYC ZR</th>
-                  <th class="p-2 border">CUMPLIMIENTO PROPUESTO</th>
-                  <th class="p-2 border text-center w-12 no-print">ACCIÓN</th>
-                </tr>
-              </thead>
-              <tbody id="tbodyClauses" class="divide-y divide-slate-100"></tbody>
-            </table>
-          </div>
+      <!-- SHEET 3: ZR RESOLUTION CLAUSES -->
+      <div id="sheetClauses" style="padding: 10px; display: none; overflow-x: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-weight: bold; text-transform: uppercase;">NYC ZONING RESOLUTION CLAUSES & COMPLIANCE TABLE</span>
+          <button onclick="addZrClauseRow()" class="excel-btn no-print">+ ADD ZR SECTION</button>
         </div>
+        <table class="excel-table">
+          <thead>
+            <tr>
+              <th style="width: 100px;">ZR SECTION</th>
+              <th style="width: 180px;">TITLE / REGULATION</th>
+              <th>OFFICIAL NYC RESOLUTION TEXT</th>
+              <th>PROPOSED PROJECT COMPLIANCE</th>
+              <th style="width: 60px; text-align: center;" class="no-print">ACTION</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyClauses"></tbody>
+        </table>
       </div>
 
-      <!-- TAB 4: CSV PREVIEW -->
-      <div id="tabContentPreview" class="tab-content hidden flex flex-col gap-4">
-        <div class="bg-white rounded-xl shadow border border-slate-200 p-5">
-          <div class="flex items-center justify-between border-b pb-3 mb-3">
-            <h2 class="text-sm font-black text-slate-900 tracking-wide uppercase">
-              <i class="fa-solid fa-code text-slate-700 mr-1.5"></i> Salida CSV en tu formato exacto
-            </h2>
-            <button onclick="updateCsvPreview()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded font-semibold transition">
-              <i class="fa-solid fa-rotate mr-1"></i> Actualizar Vista
-            </button>
-          </div>
-          <textarea id="csvPreviewText" readonly class="w-full h-96 font-mono text-[11px] bg-slate-900 text-emerald-400 p-3 rounded-lg border border-slate-700 custom-scroll focus:outline-none"></textarea>
+      <!-- SHEET 4: CSV RAW PREVIEW -->
+      <div id="sheetPreview" style="padding: 10px; display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-weight: bold; text-transform: uppercase;">RAW CSV EXPORT STREAM (MATCHES TEMPLATE EXACTLY)</span>
+          <button onclick="updateCsvPreview()" class="excel-btn no-print">REFRESH</button>
         </div>
+        <textarea id="csvPreviewText" readonly style="width: 100%; height: 500px; font-family: Courier, monospace !important; font-size: 10px; border: 1px solid #000; padding: 8px; background: #fafafa;"></textarea>
       </div>
 
     </div>
 
   </div>
 
-  <footer class="bg-slate-900 text-slate-400 text-xs py-4 px-4 border-t border-slate-800 text-center mt-auto">
-    NYC ZoLa Clone & Zoning Resolution Generator — Desarrollado con datos de NYC Planning Labs (MapPLUTO, GeoSearch).
-  </footer>
+  <!-- Excel Status Bar -->
+  <div class="excel-status-bar no-print">
+    <div><strong>STATUS:</strong> <span id="statusBarText">READY</span></div>
+    <div><strong>MODE:</strong> MONOCHROME SPREADSHEET (ARIAL / ZERO RADIUS)</div>
+    <div><strong>PROJECTION:</strong> WGS84 / EPSG:4326 (NYC PLANNING)</div>
+  </div>
 
   <script src="app.js"></script>
 </body>
